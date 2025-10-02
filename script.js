@@ -1,7 +1,7 @@
 // === API設定 ===
 const API_CONFIG = {
     // Google Apps Script Web App URL（あなたのURLに変更してください）
-    BASE_URL: 'https://script.google.com/macros/s/AKfycbyGD3RggMVEQ_80beZB-Cj8XTFDpyDW3UAsUX0DvHY/dev',
+    BASE_URL: 'https://script.google.com/macros/s/AKfycbzhMroDqsp9_fNtxRoj9Qcl39iY2YXGQdc5HxT0AFbEppDLz2kguHQGgmxB6nig-S-W/exec',
     
     TIMEOUT: 10000,
     MAX_RETRIES: 3
