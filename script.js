@@ -91,26 +91,45 @@ function safeAddEventListener(elementId, event, handler) {
     }
 }
 
-// API通信
+// API通信（修正版）
 async function loadCustomersFromAPI() {
     showLoading(true);
     
     try {
-        const response = await fetch(`${API_CONFIG.BASE_URL}?action=getCustomers&origin=${window.location.origin}`, {
+        // URLパラメータとして送信（CORS回避）
+        const url = `${API_CONFIG.BASE_URL}?action=getCustomers&origin=${encodeURIComponent(window.location.origin)}&_t=${Date.now()}`;
+        
+        console.log('API URL:', url);
+        
+        const response = await fetch(url, {
             method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            mode: 'cors',
+            cache: 'no-cache'
         });
+        
+        console.log('Response status:', response.status);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const data = await response.json();
+        const text = await response.text();
+        console.log('Response text:', text);
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            throw new Error('無効なJSONレスポンス');
+        }
         
         if (data.error) {
             throw new Error(data.error);
+        }
+        
+        if (!data.customers || !Array.isArray(data.customers)) {
+            throw new Error('顧客データが無効な形式です');
         }
         
         customers = data.customers;
@@ -118,10 +137,12 @@ async function loadCustomersFromAPI() {
         showMessage(`${customers.length}件の顧客データを更新しました`);
         updateStats();
         
+        console.log('API取得成功:', customers.length, '件');
+        
     } catch (error) {
         console.error('API取得エラー:', error);
         loadCustomersFromLocal();
-        showMessage('オフラインデータを使用中です');
+        showMessage('データ更新に失敗しました。オフラインデータを使用します。');
     } finally {
         showLoading(false);
     }
@@ -129,29 +150,33 @@ async function loadCustomersFromAPI() {
 
 async function recordEntryToAPI(customer, entryCount) {
     try {
-        const params = new URLSearchParams({
-            action: 'recordEntry',
-            origin: window.location.origin,
-            ticketNumber: customer.ticketNumber,
-            name: customer.name,
-            entryCount: entryCount,
-            deviceId: getDeviceId()
+        const url = `${API_CONFIG.BASE_URL}?action=recordEntry&origin=${encodeURIComponent(window.location.origin)}&ticketNumber=${encodeURIComponent(customer.ticketNumber)}&name=${encodeURIComponent(customer.name)}&entryCount=${entryCount}&deviceId=${encodeURIComponent(getDeviceId())}&_t=${Date.now()}`;
+        
+        console.log('Entry API URL:', url);
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache'
         });
         
-        const response = await fetch(`${API_CONFIG.BASE_URL}?${params}`, {
-            method: 'GET'
-        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
-        const data = await response.json();
+        const text = await response.text();
+        const data = JSON.parse(text);
         
         if (data.error) {
             throw new Error(data.error);
         }
         
+        console.log('入場記録API送信成功');
         return data;
+        
     } catch (error) {
-        console.error('入場記録エラー:', error);
-        // オフライン時はローカルのみに記録
+        console.error('入場記録API送信エラー:', error);
+        // エラーでもローカルには記録済みなので、処理は継続
     }
 }
 
