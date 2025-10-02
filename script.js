@@ -1,6 +1,6 @@
 // === API設定 ===
 const API_CONFIG = {
-    // Google Apps Script Web App URL（手順2-4で取得したURLに変更してください）
+    // Google Apps Script Web App URL（あなたのURLに変更してください）
     BASE_URL: 'https://script.google.com/macros/s/AKfycbzkPnvfJvo946MAZYFMQqoZ1CCMuRrO0lckUFF37cOM_EGESCRNjGAes-7wS-AFdmQu/exec',
     
     TIMEOUT: 10000,
@@ -25,12 +25,18 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('初期化完了');
 });
 
-// イベントリスナー設定
+// イベントリスナー設定（統合版）
 function setupEventListeners() {
+    console.log('イベントリスナー設定開始...');
+    
     // メイン画面
     safeAddEventListener('startQRScan', 'click', showQRScanScreen);
     safeAddEventListener('manualEntry', 'click', showManualEntryScreen);
     safeAddEventListener('updateBtn', 'click', loadCustomersFromAPI);
+    
+    // データ管理メニュー
+    safeAddEventListener('menuBtn', 'click', showDataMenuScreen);
+    safeAddEventListener('backToMainFromMenu', 'click', showMainScreen);
     
     // QRスキャン画面
     safeAddEventListener('stopQRScan', 'click', function() {
@@ -55,6 +61,24 @@ function setupEventListeners() {
     
     // 完了画面
     safeAddEventListener('nextCustomer', 'click', showMainScreen);
+    
+    // 顧客データ一覧
+    safeAddEventListener('viewCustomersBtn', 'click', showCustomerListScreen);
+    safeAddEventListener('backToMenuFromCustomers', 'click', showDataMenuScreen);
+    safeAddEventListener('customerSearchInput', 'input', filterCustomerList);
+    safeAddEventListener('customerFilterSelect', 'change', filterCustomerList);
+    
+    // 入場記録一覧
+    safeAddEventListener('viewEntriesBtn', 'click', showEntryListScreen);
+    safeAddEventListener('backToMenuFromEntries', 'click', showDataMenuScreen);
+    safeAddEventListener('entrySearchInput', 'input', filterEntryList);
+    safeAddEventListener('entryDateFilter', 'change', filterEntryList);
+    
+    // データ操作
+    safeAddEventListener('exportDataBtn', 'click', exportData);
+    safeAddEventListener('clearDataBtn', 'click', clearEntryData);
+    
+    console.log('すべてのイベントリスナー設定完了');
 }
 
 function safeAddEventListener(elementId, event, handler) {
@@ -208,6 +232,7 @@ function loadProcessedCustomers() {
 
 // 画面制御
 function showMainScreen() {
+    console.log('メイン画面表示');
     hideAllScreens();
     const mainScreen = document.getElementById('mainScreen');
     if (mainScreen) {
@@ -217,6 +242,7 @@ function showMainScreen() {
 }
 
 function showQRScanScreen() {
+    console.log('QRスキャン画面表示');
     hideAllScreens();
     const qrScreen = document.getElementById('qrScanScreen');
     if (qrScreen) {
@@ -229,6 +255,7 @@ function showQRScanScreen() {
 }
 
 function showManualEntryScreen() {
+    console.log('手動入力画面表示');
     hideAllScreens();
     const manualScreen = document.getElementById('manualEntryScreen');
     if (manualScreen) {
@@ -248,6 +275,35 @@ function showManualEntryScreen() {
     }
 }
 
+function showDataMenuScreen() {
+    console.log('データ管理メニュー画面表示');
+    hideAllScreens();
+    const menuScreen = document.getElementById('dataMenuScreen');
+    if (menuScreen) {
+        menuScreen.classList.remove('hidden');
+    }
+}
+
+function showCustomerListScreen() {
+    console.log('顧客データ一覧画面表示');
+    hideAllScreens();
+    const customerListScreen = document.getElementById('customerListScreen');
+    if (customerListScreen) {
+        customerListScreen.classList.remove('hidden');
+    }
+    displayCustomerList();
+}
+
+function showEntryListScreen() {
+    console.log('入場記録一覧画面表示');
+    hideAllScreens();
+    const entryListScreen = document.getElementById('entryListScreen');
+    if (entryListScreen) {
+        entryListScreen.classList.remove('hidden');
+    }
+    displayEntryList();
+}
+
 function hideAllScreens() {
     const screens = document.querySelectorAll('.screen');
     screens.forEach(screen => {
@@ -258,6 +314,8 @@ function hideAllScreens() {
 // QRスキャナー
 async function startQRScanner() {
     if (isScanning) return;
+    
+    console.log('QRスキャナー開始試行...');
     
     try {
         html5QrCode = new Html5Qrcode("qrReader");
@@ -276,6 +334,7 @@ async function startQRScanner() {
         );
         
         updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+        console.log('QRスキャナー開始成功');
         
     } catch (error) {
         console.error('QRスキャナーエラー:', error);
@@ -289,6 +348,7 @@ async function stopQRScanner() {
             await html5QrCode.stop();
             html5QrCode.clear();
             isScanning = false;
+            console.log('QRスキャナー停止完了');
         } catch (error) {
             console.error('QRスキャナー停止エラー:', error);
             isScanning = false;
@@ -339,6 +399,7 @@ function updateScanStatus(message, status) {
 
 // 検索
 function performSearch() {
+    console.log('検索実行');
     const searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
     
@@ -387,6 +448,7 @@ function selectCustomer(ticketNumber) {
 }
 
 function showCustomerInfo(customer) {
+    console.log('顧客情報表示:', customer.name);
     hideAllScreens();
     
     const customerScreen = document.getElementById('customerInfoScreen');
@@ -408,6 +470,9 @@ function showCustomerInfo(customer) {
         entryCountInput.value = customer.tickets || 1;
         entryCountInput.max = customer.tickets || 10;
     }
+    
+    // 入場履歴を表示
+    displayCustomerEntryHistory(customer);
 }
 
 function safeSetTextContent(elementId, text) {
@@ -432,6 +497,8 @@ function processEntry() {
         return;
     }
     
+    console.log('入場処理:', currentCustomer.name);
+    
     const processedCustomer = {
         ...currentCustomer,
         entryTime: new Date().toLocaleString('ja-JP'),
@@ -449,6 +516,7 @@ function processEntry() {
 }
 
 function showCompletionScreen(customer) {
+    console.log('完了画面表示');
     hideAllScreens();
     
     const completionScreen = document.getElementById('completionScreen');
@@ -486,6 +554,219 @@ function updateStats() {
                 <div class="stat-label">総チケット数</div>
             </div>
         `;
+    }
+}
+
+// データ管理機能
+function displayCustomerList() {
+    const listElement = document.getElementById('customerList');
+    const statsElement = document.getElementById('customerListStats');
+    
+    if (!listElement || !statsElement) return;
+    
+    // 統計更新
+    const totalCustomers = customers.length;
+    const enteredCustomers = customers.filter(customer => 
+        processedCustomers.some(p => p.ticketNumber === customer.ticketNumber)
+    ).length;
+    
+    statsElement.textContent = `全${totalCustomers}名 (入場済み: ${enteredCustomers}名, 未入場: ${totalCustomers - enteredCustomers}名)`;
+    
+    // リスト表示
+    if (customers.length === 0) {
+        listElement.innerHTML = '<p class="no-data">顧客データがありません</p>';
+        return;
+    }
+    
+    const customersToShow = getFilteredCustomers();
+    
+    listElement.innerHTML = customersToShow.map(customer => {
+        const hasEntered = processedCustomers.some(p => p.ticketNumber === customer.ticketNumber);
+        const entryCount = processedCustomers.filter(p => p.ticketNumber === customer.ticketNumber).length;
+        
+        return `
+            <div class="list-item ${hasEntered ? 'entered' : 'not-entered'}" onclick="showCustomerDetailFromList('${customer.ticketNumber}')">
+                <div class="list-item-header">
+                    <span class="customer-name">${customer.name}</span>
+                    <span class="entry-status ${hasEntered ? 'entered' : 'pending'}">
+                        ${hasEntered ? `✅ 入場済み (${entryCount}回)` : '⏳ 未入場'}
+                    </span>
+                </div>
+                <div class="list-item-details">
+                    <span>チケット: ${customer.ticketNumber}</span>
+                    <span>枚数: ${customer.tickets}枚</span>
+                    <span>座席: ${customer.seatNumber || '未指定'}</span>
+                </div>
+                <div class="list-item-email">${customer.email}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function displayEntryList() {
+    const listElement = document.getElementById('entryList');
+    const statsElement = document.getElementById('entryListStats');
+    
+    if (!listElement || !statsElement) return;
+    
+    // 統計更新
+    const totalEntries = processedCustomers.length;
+    const totalTickets = processedCustomers.reduce((sum, customer) => 
+        sum + (customer.entryCount || customer.tickets || 1), 0);
+    
+    statsElement.textContent = `全${totalEntries}件の入場記録 (総チケット数: ${totalTickets}枚)`;
+    
+    // リスト表示
+    if (processedCustomers.length === 0) {
+        listElement.innerHTML = '<p class="no-data">入場記録がありません</p>';
+        return;
+    }
+    
+    const entriesToShow = getFilteredEntries();
+    
+    listElement.innerHTML = entriesToShow.map((entry, index) => `
+        <div class="list-item entry-item">
+            <div class="list-item-header">
+                <span class="customer-name">${entry.name}</span>
+                <span class="entry-time">${entry.entryTime}</span>
+            </div>
+            <div class="list-item-details">
+                <span>チケット: ${entry.ticketNumber}</span>
+                <span>入場人数: ${entry.entryCount || entry.tickets || 1}名</span>
+                <span>座席: ${entry.seatNumber || '未指定'}</span>
+            </div>
+            <div class="list-item-email">${entry.email}</div>
+        </div>
+    `).join('');
+}
+
+function getFilteredCustomers() {
+    const searchTerm = document.getElementById('customerSearchInput')?.value.toLowerCase() || '';
+    const filter = document.getElementById('customerFilterSelect')?.value || 'all';
+    
+    let filtered = customers.filter(customer => {
+        const matchesSearch = 
+            customer.name.toLowerCase().includes(searchTerm) ||
+            customer.email.toLowerCase().includes(searchTerm) ||
+            customer.ticketNumber.toString().includes(searchTerm);
+        
+        if (!matchesSearch) return false;
+        
+        const hasEntered = processedCustomers.some(p => p.ticketNumber === customer.ticketNumber);
+        
+        switch (filter) {
+            case 'entered': return hasEntered;
+            case 'not-entered': return !hasEntered;
+            default: return true;
+        }
+    });
+    
+    return filtered;
+}
+
+function getFilteredEntries() {
+    const searchTerm = document.getElementById('entrySearchInput')?.value.toLowerCase() || '';
+    const dateFilter = document.getElementById('entryDateFilter')?.value || '';
+    
+    let filtered = processedCustomers.filter(entry => {
+        const matchesSearch = 
+            entry.name.toLowerCase().includes(searchTerm) ||
+            entry.ticketNumber.toString().includes(searchTerm);
+        
+        if (!matchesSearch) return false;
+        
+        if (dateFilter) {
+            const entryDate = new Date(entry.entryTime).toISOString().split('T')[0];
+            if (entryDate !== dateFilter) return false;
+        }
+        
+        return true;
+    });
+    
+    // 新しい順にソート
+    return filtered.sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime));
+}
+
+function filterCustomerList() {
+    displayCustomerList();
+}
+
+function filterEntryList() {
+    displayEntryList();
+}
+
+function showCustomerDetailFromList(ticketNumber) {
+    const customer = customers.find(c => c.ticketNumber.toString() === ticketNumber);
+    if (customer) {
+        showCustomerInfo(customer);
+    }
+}
+
+function displayCustomerEntryHistory(customer) {
+    const historySection = document.getElementById('entryHistory');
+    const historyList = document.getElementById('entryHistoryList');
+    
+    if (!historySection || !historyList) return;
+    
+    const customerEntries = processedCustomers.filter(p => p.ticketNumber === customer.ticketNumber);
+    
+    if (customerEntries.length > 0) {
+        historySection.classList.remove('hidden');
+        historyList.innerHTML = customerEntries.map((entry, index) => `
+            <div class="history-item">
+                <div class="history-time">${entry.entryTime}</div>
+                <div class="history-details">入場人数: ${entry.entryCount || entry.tickets || 1}名</div>
+            </div>
+        `).join('');
+    } else {
+        historySection.classList.add('hidden');
+    }
+}
+
+function exportData() {
+    const csvData = generateCSVData();
+    downloadCSV(csvData, `入場記録_${new Date().toISOString().split('T')[0]}.csv`);
+    showMessage('データをCSVファイルでダウンロードしました');
+}
+
+function generateCSVData() {
+    const headers = ['入場時刻', 'チケット番号', '名前', 'メールアドレス', '入場人数', '座席番号'];
+    const rows = processedCustomers.map(entry => [
+        entry.entryTime,
+        entry.ticketNumber,
+        entry.name,
+        entry.email,
+        entry.entryCount || entry.tickets || 1,
+        entry.seatNumber || ''
+    ]);
+    
+    return [headers, ...rows].map(row => 
+        row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+}
+
+function downloadCSV(csvContent, filename) {
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+function clearEntryData() {
+    if (confirm('本当に入場記録をすべてクリアしますか？この操作は元に戻せません。')) {
+        processedCustomers = [];
+        saveProcessedCustomers();
+        updateStats();
+        showMessage('入場記録をクリアしました');
+        showDataMenuScreen();
     }
 }
 
@@ -595,299 +876,3 @@ if ('serviceWorker' in navigator) {
 }
 
 console.log('🚀 script.js 読み込み完了');
-
-// 既存のコードの後に以下を追加
-
-// データ管理関連の関数
-function setupDataManagementListeners() {
-    // メニュー関連
-    safeAddEventListener('menuBtn', 'click', showDataMenuScreen);
-    safeAddEventListener('backToMainFromMenu', 'click', showMainScreen);
-    
-    // 顧客データ一覧
-    safeAddEventListener('viewCustomersBtn', 'click', showCustomerListScreen);
-    safeAddEventListener('backToMenuFromCustomers', 'click', showDataMenuScreen);
-    safeAddEventListener('customerSearchInput', 'input', filterCustomerList);
-    safeAddEventListener('customerFilterSelect', 'change', filterCustomerList);
-    
-    // 入場記録一覧
-    safeAddEventListener('viewEntriesBtn', 'click', showEntryListScreen);
-    safeAddEventListener('backToMenuFromEntries', 'click', showDataMenuScreen);
-    safeAddEventListener('entrySearchInput', 'input', filterEntryList);
-    safeAddEventListener('entryDateFilter', 'change', filterEntryList);
-    
-    // データ操作
-    safeAddEventListener('exportDataBtn', 'click', exportData);
-    safeAddEventListener('clearDataBtn', 'click', clearEntryData);
-}
-
-// setupEventListeners関数に追加
-function setupEventListeners() {
-    // 既存のイベントリスナー...
-    
-    // データ管理機能を追加
-    setupDataManagementListeners();
-}
-
-// データ管理メニュー画面
-function showDataMenuScreen() {
-    hideAllScreens();
-    const menuScreen = document.getElementById('dataMenuScreen');
-    if (menuScreen) {
-        menuScreen.classList.remove('hidden');
-    }
-}
-
-// 顧客データ一覧画面
-function showCustomerListScreen() {
-    hideAllScreens();
-    const customerListScreen = document.getElementById('customerListScreen');
-    if (customerListScreen) {
-        customerListScreen.classList.remove('hidden');
-    }
-    displayCustomerList();
-}
-
-// 入場記録一覧画面
-function showEntryListScreen() {
-    hideAllScreens();
-    const entryListScreen = document.getElementById('entryListScreen');
-    if (entryListScreen) {
-        entryListScreen.classList.remove('hidden');
-    }
-    displayEntryList();
-}
-
-// 顧客データ一覧表示
-function displayCustomerList() {
-    const listElement = document.getElementById('customerList');
-    const statsElement = document.getElementById('customerListStats');
-    
-    if (!listElement || !statsElement) return;
-    
-    // 統計更新
-    const totalCustomers = customers.length;
-    const enteredCustomers = customers.filter(customer => 
-        processedCustomers.some(p => p.ticketNumber === customer.ticketNumber)
-    ).length;
-    
-    statsElement.textContent = `全${totalCustomers}名 (入場済み: ${enteredCustomers}名, 未入場: ${totalCustomers - enteredCustomers}名)`;
-    
-    // リスト表示
-    if (customers.length === 0) {
-        listElement.innerHTML = '<p class="no-data">顧客データがありません</p>';
-        return;
-    }
-    
-    const customersToShow = getFilteredCustomers();
-    
-    listElement.innerHTML = customersToShow.map(customer => {
-        const hasEntered = processedCustomers.some(p => p.ticketNumber === customer.ticketNumber);
-        const entryCount = processedCustomers.filter(p => p.ticketNumber === customer.ticketNumber).length;
-        
-        return `
-            <div class="list-item ${hasEntered ? 'entered' : 'not-entered'}" onclick="showCustomerDetailFromList('${customer.ticketNumber}')">
-                <div class="list-item-header">
-                    <span class="customer-name">${customer.name}</span>
-                    <span class="entry-status ${hasEntered ? 'entered' : 'pending'}">
-                        ${hasEntered ? `✅ 入場済み (${entryCount}回)` : '⏳ 未入場'}
-                    </span>
-                </div>
-                <div class="list-item-details">
-                    <span>チケット: ${customer.ticketNumber}</span>
-                    <span>枚数: ${customer.tickets}枚</span>
-                    <span>座席: ${customer.seatNumber || '未指定'}</span>
-                </div>
-                <div class="list-item-email">${customer.email}</div>
-            </div>
-        `;
-    }).join('');
-}
-
-// 入場記録一覧表示
-function displayEntryList() {
-    const listElement = document.getElementById('entryList');
-    const statsElement = document.getElementById('entryListStats');
-    
-    if (!listElement || !statsElement) return;
-    
-    // 統計更新
-    const totalEntries = processedCustomers.length;
-    const totalTickets = processedCustomers.reduce((sum, customer) => 
-        sum + (customer.entryCount || customer.tickets || 1), 0);
-    
-    statsElement.textContent = `全${totalEntries}件の入場記録 (総チケット数: ${totalTickets}枚)`;
-    
-    // リスト表示
-    if (processedCustomers.length === 0) {
-        listElement.innerHTML = '<p class="no-data">入場記録がありません</p>';
-        return;
-    }
-    
-    const entriesToShow = getFilteredEntries();
-    
-    listElement.innerHTML = entriesToShow.map((entry, index) => `
-        <div class="list-item entry-item">
-            <div class="list-item-header">
-                <span class="customer-name">${entry.name}</span>
-                <span class="entry-time">${entry.entryTime}</span>
-            </div>
-            <div class="list-item-details">
-                <span>チケット: ${entry.ticketNumber}</span>
-                <span>入場人数: ${entry.entryCount || entry.tickets || 1}名</span>
-                <span>座席: ${entry.seatNumber || '未指定'}</span>
-            </div>
-            <div class="list-item-email">${entry.email}</div>
-        </div>
-    `).join('');
-}
-
-// 顧客リストフィルター
-function getFilteredCustomers() {
-    const searchTerm = document.getElementById('customerSearchInput')?.value.toLowerCase() || '';
-    const filter = document.getElementById('customerFilterSelect')?.value || 'all';
-    
-    let filtered = customers.filter(customer => {
-        const matchesSearch = 
-            customer.name.toLowerCase().includes(searchTerm) ||
-            customer.email.toLowerCase().includes(searchTerm) ||
-            customer.ticketNumber.toString().includes(searchTerm);
-        
-        if (!matchesSearch) return false;
-        
-        const hasEntered = processedCustomers.some(p => p.ticketNumber === customer.ticketNumber);
-        
-        switch (filter) {
-            case 'entered': return hasEntered;
-            case 'not-entered': return !hasEntered;
-            default: return true;
-        }
-    });
-    
-    return filtered;
-}
-
-// 入場記録フィルター
-function getFilteredEntries() {
-    const searchTerm = document.getElementById('entrySearchInput')?.value.toLowerCase() || '';
-    const dateFilter = document.getElementById('entryDateFilter')?.value || '';
-    
-    let filtered = processedCustomers.filter(entry => {
-        const matchesSearch = 
-            entry.name.toLowerCase().includes(searchTerm) ||
-            entry.ticketNumber.toString().includes(searchTerm);
-        
-        if (!matchesSearch) return false;
-        
-        if (dateFilter) {
-            const entryDate = new Date(entry.entryTime).toISOString().split('T')[0];
-            if (entryDate !== dateFilter) return false;
-        }
-        
-        return true;
-    });
-    
-    // 新しい順にソート
-    return filtered.sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime));
-}
-
-// フィルター適用
-function filterCustomerList() {
-    displayCustomerList();
-}
-
-function filterEntryList() {
-    displayEntryList();
-}
-
-// 顧客詳細表示（一覧から）
-function showCustomerDetailFromList(ticketNumber) {
-    const customer = customers.find(c => c.ticketNumber.toString() === ticketNumber);
-    if (customer) {
-        showCustomerInfo(customer);
-        
-        // 入場履歴を表示
-        displayCustomerEntryHistory(customer);
-    }
-}
-
-// 顧客の入場履歴表示
-function displayCustomerEntryHistory(customer) {
-    const historySection = document.getElementById('entryHistory');
-    const historyList = document.getElementById('entryHistoryList');
-    
-    if (!historySection || !historyList) return;
-    
-    const customerEntries = processedCustomers.filter(p => p.ticketNumber === customer.ticketNumber);
-    
-    if (customerEntries.length > 0) {
-        historySection.classList.remove('hidden');
-        historyList.innerHTML = customerEntries.map((entry, index) => `
-            <div class="history-item">
-                <div class="history-time">${entry.entryTime}</div>
-                <div class="history-details">入場人数: ${entry.entryCount || entry.tickets || 1}名</div>
-            </div>
-        `).join('');
-    } else {
-        historySection.classList.add('hidden');
-    }
-}
-
-// データエクスポート
-function exportData() {
-    const csvData = generateCSVData();
-    downloadCSV(csvData, `入場記録_${new Date().toISOString().split('T')[0]}.csv`);
-    showMessage('データをCSVファイルでダウンロードしました');
-}
-
-// CSV生成
-function generateCSVData() {
-    const headers = ['入場時刻', 'チケット番号', '名前', 'メールアドレス', '入場人数', '座席番号'];
-    const rows = processedCustomers.map(entry => [
-        entry.entryTime,
-        entry.ticketNumber,
-        entry.name,
-        entry.email,
-        entry.entryCount || entry.tickets || 1,
-        entry.seatNumber || ''
-    ]);
-    
-    return [headers, ...rows].map(row => 
-        row.map(cell => `"${cell}"`).join(',')
-    ).join('\n');
-}
-
-// CSVダウンロード
-function downloadCSV(csvContent, filename) {
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-}
-
-// データクリア
-function clearEntryData() {
-    if (confirm('本当に入場記録をすべてクリアしますか？この操作は元に戻せません。')) {
-        processedCustomers = [];
-        saveProcessedCustomers();
-        updateStats();
-        showMessage('入場記録をクリアしました');
-        showDataMenuScreen();
-    }
-}
-
-// 既存のshowCustomerInfo関数を修正して履歴表示を追加
-const originalShowCustomerInfo = showCustomerInfo;
-showCustomerInfo = function(customer) {
-    originalShowCustomerInfo(customer);
-    displayCustomerEntryHistory(customer);
-};
-
