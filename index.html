@@ -12,7 +12,10 @@
     <!-- ヘッダー -->
     <header class="header">
         <h1>🎫 入場管理アプリ</h1>
-        <button id="updateBtn" class="update-btn">📥 データ更新</button>
+        <div class="header-buttons">
+            <button id="updateBtn" class="update-btn">📥 データ更新</button>
+            <button id="menuBtn" class="update-btn">📋 データ管理</button>
+        </div>
     </header>
 
     <!-- メイン画面 -->
@@ -37,6 +40,72 @@
             </div>
         </div>
     </main>
+
+    <!-- データ管理メニュー画面 -->
+    <div class="screen hidden" id="dataMenuScreen">
+        <div class="scan-header">
+            <button id="backToMainFromMenu" class="back-btn">← 戻る</button>
+            <h2>📋 データ管理</h2>
+        </div>
+        <div class="menu-grid">
+            <button id="viewCustomersBtn" class="menu-item">
+                <div class="menu-icon">👥</div>
+                <div class="menu-title">顧客データ一覧</div>
+                <div class="menu-desc">全顧客データを表示</div>
+            </button>
+            <button id="viewEntriesBtn" class="menu-item">
+                <div class="menu-icon">📋</div>
+                <div class="menu-title">入場記録一覧</div>
+                <div class="menu-desc">入場履歴を表示</div>
+            </button>
+            <button id="exportDataBtn" class="menu-item">
+                <div class="menu-icon">💾</div>
+                <div class="menu-title">データエクスポート</div>
+                <div class="menu-desc">CSVでダウンロード</div>
+            </button>
+            <button id="clearDataBtn" class="menu-item danger">
+                <div class="menu-icon">🗑️</div>
+                <div class="menu-title">データクリア</div>
+                <div class="menu-desc">入場記録をリセット</div>
+            </button>
+        </div>
+    </div>
+
+    <!-- 顧客データ一覧画面 -->
+    <div class="screen hidden" id="customerListScreen">
+        <div class="scan-header">
+            <button id="backToMenuFromCustomers" class="back-btn">← 戻る</button>
+            <h2>👥 顧客データ一覧</h2>
+        </div>
+        <div class="list-controls">
+            <input type="text" id="customerSearchInput" class="search-input" placeholder="名前、チケット番号、メールで検索...">
+            <select id="customerFilterSelect" class="filter-select">
+                <option value="all">全て表示</option>
+                <option value="entered">入場済み</option>
+                <option value="not-entered">未入場</option>
+            </select>
+        </div>
+        <div class="list-stats">
+            <span id="customerListStats">顧客データを読み込み中...</span>
+        </div>
+        <div id="customerList" class="data-list"></div>
+    </div>
+
+    <!-- 入場記録一覧画面 -->
+    <div class="screen hidden" id="entryListScreen">
+        <div class="scan-header">
+            <button id="backToMenuFromEntries" class="back-btn">← 戻る</button>
+            <h2>📋 入場記録一覧</h2>
+        </div>
+        <div class="list-controls">
+            <input type="text" id="entrySearchInput" class="search-input" placeholder="名前、チケット番号で検索...">
+            <input type="date" id="entryDateFilter" class="date-filter">
+        </div>
+        <div class="list-stats">
+            <span id="entryListStats">入場記録を読み込み中...</span>
+        </div>
+        <div id="entryList" class="data-list"></div>
+    </div>
 
     <!-- QRスキャン画面 -->
     <div class="screen hidden" id="qrScanScreen">
@@ -97,6 +166,12 @@
             </div>
         </div>
 
+        <!-- 入場履歴表示 -->
+        <div id="entryHistory" class="entry-history hidden">
+            <h3>📝 入場履歴</h3>
+            <div id="entryHistoryList"></div>
+        </div>
+
         <div class="entry-section">
             <h3>入場処理</h3>
             <div class="input-group">
@@ -133,3 +208,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+
