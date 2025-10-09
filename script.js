@@ -1,3 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>カメラ許可問題解決版 script.js</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css" />
+    <style>
+      body {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 32px 80px;
+        position: relative;
+        box-sizing: border-box;
+        font-family: 'Times New Roman', serif;
+        line-height: 1.6;
+        color: #333;
+        background: white;
+      }
+
+      h1 {
+        text-align: center;
+        color: #2c3e50;
+        border-bottom: 2px solid #2c3e50;
+        padding-bottom: 16px;
+        margin-bottom: 32px;
+      }
+
+      h2 {
+        color: #34495e;
+        margin-top: 32px;
+        margin-bottom: 16px;
+      }
+
+      .code-section {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 20px;
+        margin: 20px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .description {
+        background: #e7f3ff;
+        border-left: 4px solid #2196f3;
+        padding: 15px;
+        margin: 15px 0;
+      }
+
+      .warning {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+        padding: 15px;
+        margin: 15px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>カメラ許可問題解決版 script.js</h1>
+
+    <div class="description">
+      <strong>概要：</strong
+      >この修正版script.jsファイルは、QRコード読み取り後にカメラ許可が消える問題を解決し、既存の全機能を維持しながら、カメラストリーム保持、一時停止・再開、連続スキャンモードを実装します。
+    </div>
+
+    <h2>完全修正版 script.js</h2>
+
+    <div class="code-section">
+      <pre>
+new_string:
+// ========================================
+// 入場管理アプリ - カメラ許可問題解決版 JavaScript
+// QRスキャン後もカメラストリームを維持する改良版
+// ========================================
+
 // === API設定 ===
 const API_CONFIG = {
     // Google Apps Script Web App URL（あなたのURLに変更してください）
@@ -7,27 +85,56 @@ const API_CONFIG = {
     MAX_RETRIES: 3
 };
 
+// === グローバル変数 ===
 let customers = [];
 let processedCustomers = [];
 let currentCustomer = null;
 let html5QrCode = null;
 let isScanning = false;
 
-// 初期化
+// === NEW: カメラ許可問題解決用の変数 ===
+let scannerPaused = false; // スキャナー一時停止フラグ
+let continuousScanMode = true; // 連続スキャンモード
+let cameraInitialized = false; // カメラ初期化完了フラグ
+let autoReturnToScan = true; // 自動でスキャン画面に戻る機能
+
+// === アプリケーション初期化 ===
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('アプリケーション開始');
+    console.log('🚀 入場管理アプリを開始します（カメラ許可問題解決版）');
+    
+    // 設定の読み込み
+    loadScanSettings();
     
     setupEventListeners();
     loadProcessedCustomers();
     loadCustomersFromAPI();
     updateStats();
     
-    console.log('初期化完了');
+    console.log('✅ 初期化完了（カメラ保持機能付き）');
 });
 
-// イベントリスナー設定（統合版）
+// === NEW: スキャン設定の読み込み ===
+function loadScanSettings() {
+    try {
+        const savedContinuousMode = localStorage.getItem('continuousScanMode');
+        if (savedContinuousMode !== null) {
+            continuousScanMode = JSON.parse(savedContinuousMode);
+        }
+        
+        const savedAutoReturn = localStorage.getItem('autoReturnToScan');
+        if (savedAutoReturn !== null) {
+            autoReturnToScan = JSON.parse(savedAutoReturn);
+        }
+        
+        console.log('⚙️ スキャン設定読み込み:', { continuousScanMode, autoReturnToScan });
+    } catch (error) {
+        console.error('❌ スキャン設定読み込みエラー:', error);
+    }
+}
+
+// === イベントリスナー設定（統合版） ===
 function setupEventListeners() {
-    console.log('イベントリスナー設定開始...');
+    console.log('🔗 イベントリスナー設定開始...');
     
     // メイン画面
     safeAddEventListener('startQRScan', 'click', showQRScanScreen);
@@ -48,6 +155,21 @@ function setupEventListeners() {
         showManualEntryScreen();
     });
     
+    // NEW: QRスキャン画面の新機能
+    safeAddEventListener('pauseResumeBtn', 'click', function() {
+        if (scannerPaused) {
+            resumeQRScanner();
+        } else {
+            pauseQRScanner();
+        }
+        updatePauseResumeButton();
+    });
+    
+    safeAddEventListener('continuousModeBtn', 'click', function() {
+        toggleContinuousMode();
+        updateContinuousModeButton();
+    });
+    
     // 手動入力画面
     safeAddEventListener('searchButton', 'click', performSearch);
     safeAddEventListener('backToMain', 'click', showMainScreen);
@@ -62,23 +184,21 @@ function setupEventListeners() {
     // 完了画面
     safeAddEventListener('nextCustomer', 'click', showMainScreen);
     
-    // 顧客データ一覧
+    // データ管理機能
     safeAddEventListener('viewCustomersBtn', 'click', showCustomerListScreen);
     safeAddEventListener('backToMenuFromCustomers', 'click', showDataMenuScreen);
     safeAddEventListener('customerSearchInput', 'input', filterCustomerList);
     safeAddEventListener('customerFilterSelect', 'change', filterCustomerList);
     
-    // 入場記録一覧
     safeAddEventListener('viewEntriesBtn', 'click', showEntryListScreen);
     safeAddEventListener('backToMenuFromEntries', 'click', showDataMenuScreen);
     safeAddEventListener('entrySearchInput', 'input', filterEntryList);
     safeAddEventListener('entryDateFilter', 'change', filterEntryList);
     
-    // データ操作
     safeAddEventListener('exportDataBtn', 'click', exportData);
     safeAddEventListener('clearDataBtn', 'click', clearEntryData);
     
-    console.log('すべてのイベントリスナー設定完了');
+    console.log('✅ すべてのイベントリスナー設定完了');
 }
 
 function safeAddEventListener(elementId, event, handler) {
@@ -91,7 +211,202 @@ function safeAddEventListener(elementId, event, handler) {
     }
 }
 
-// API通信（修正版）
+// === 改良版: QRスキャナー開始（カメラストリーム保持） ===
+async function startQRScanner() {
+    console.log('📷 QRスキャナー開始（カメラストリーム保持版）');
+    
+    try {
+        // 既に初期化済みで一時停止中の場合は再開
+        if (html5QrCode && cameraInitialized && scannerPaused) {
+            resumeQRScanner();
+            return;
+        }
+        
+        // 新規初期化または再初期化
+        if (!html5QrCode || !cameraInitialized) {
+            html5QrCode = new Html5Qrcode("qrReader");
+            
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                disableFlip: false,
+                rememberLastUsedCamera: true // カメラ選択を記憶
+            };
+            
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onQRScanSuccess,
+                onQRScanError
+            );
+            
+            cameraInitialized = true;
+        }
+        
+        isScanning = true;
+        scannerPaused = false;
+        
+        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+        console.log('✅ QRスキャナー開始成功');
+        
+    } catch (error) {
+        console.error('❌ QRスキャナー開始エラー:', error);
+        updateScanStatus('カメラの起動に失敗しました', 'error');
+        cameraInitialized = false;
+        isScanning = false;
+        
+        // カメラエラー時は手動入力を推奨
+        setTimeout(() => {
+            showMessage('カメラが使用できません。手動入力をご利用ください。');
+            showManualEntryScreen();
+        }, 2000);
+    }
+}
+
+// === NEW: QRスキャナー一時停止（カメラ保持） ===
+function pauseQRScanner() {
+    if (!html5QrCode || !isScanning || scannerPaused) {
+        return;
+    }
+    
+    console.log('⏸️ QRスキャナー一時停止（カメラストリーム保持）');
+    scannerPaused = true;
+    
+    updateScanStatus('スキャンを一時停止しました', 'paused');
+    showMessage('スキャンを一時停止しました', 'warning');
+}
+
+// === NEW: QRスキャナー再開 ===
+function resumeQRScanner() {
+    if (!html5QrCode || !cameraInitialized || !scannerPaused) {
+        return;
+    }
+    
+    console.log('▶️ QRスキャナー再開');
+    scannerPaused = false;
+    isScanning = true;
+    
+    updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+    showMessage('スキャンを再開しました', 'success');
+}
+
+// === 改良版: QRスキャナー停止（clear()を使わない） ===
+async function stopQRScanner() {
+    if (!html5QrCode || !isScanning) {
+        return;
+    }
+    
+    try {
+        console.log('⏹️ QRスキャナー停止（カメラストリーム保持）');
+        
+        // カメラストリームは停止するが、clear()は呼ばない
+        await html5QrCode.stop();
+        
+        isScanning = false;
+        scannerPaused = false;
+        // cameraInitializedはtrueのまま保持
+        
+        console.log('✅ QRスキャナー停止完了（再起動高速化）');
+        
+    } catch (error) {
+        console.error('❌ QRスキャナー停止エラー:', error);
+        isScanning = false;
+        scannerPaused = false;
+    }
+}
+
+// === NEW: 完全なリソース解放（アプリ終了時のみ） ===
+function completelyStopScanner() {
+    console.log('🛑 スキャナー完全停止');
+    
+    if (html5QrCode && cameraInitialized) {
+        html5QrCode.stop()
+            .then(() => {
+                // 完全終了時のみclear()を実行
+                html5QrCode.clear();
+                html5QrCode = null;
+                cameraInitialized = false;
+                isScanning = false;
+                scannerPaused = false;
+                console.log('✅ スキャナー完全停止完了');
+            })
+            .catch(error => {
+                console.error('❌ 完全停止エラー:', error);
+            });
+    }
+}
+
+// === 改良版: QRコード読み取り成功時の処理 ===
+function onQRScanSuccess(decodedText) {
+    // 一時停止中は処理しない
+    if (scannerPaused) {
+        return;
+    }
+    
+    console.log('✅ QRコード読み取り成功:', decodedText);
+    playSuccessSound();
+    updateScanStatus('読み取り成功！', 'success');
+    
+    // 顧客情報を検索
+    const customer = findCustomerByQR(decodedText);
+    
+    if (customer) {
+        console.log('👤 顧客発見:', customer.name);
+        
+        // 連続スキャンモードでない場合のみ一時停止
+        if (!continuousScanMode) {
+            pauseQRScanner();
+        }
+        
+        showCustomerInfo(customer);
+        
+    } else {
+        console.log('❌ 顧客が見つかりません');
+        playErrorSound();
+        updateScanStatus('顧客が見つかりません', 'error');
+        showMessage('該当するチケットが見つかりません', 'error');
+        
+        // 連続スキャンモードの場合、継続してスキャン
+        setTimeout(() => {
+            updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+        }, 3000);
+    }
+}
+
+function onQRScanError(errorMessage) {
+    // エラーは頻繁なので無視
+}
+
+// === NEW: 連続スキャンモード切り替え ===
+function toggleContinuousMode() {
+    continuousScanMode = !continuousScanMode;
+    
+    // ローカルストレージに保存
+    localStorage.setItem('continuousScanMode', JSON.stringify(continuousScanMode));
+    
+    const message = `連続スキャンモードを${continuousScanMode ? 'ON' : 'OFF'}にしました`;
+    showMessage(message, 'info');
+    
+    console.log('🔄 連続スキャンモード:', continuousScanMode);
+}
+
+// === NEW: ボタン状態更新 ===
+function updatePauseResumeButton() {
+    const button = document.getElementById('pauseResumeBtn');
+    if (button) {
+        button.textContent = scannerPaused ? '▶️ 再開' : '⏸️ 一時停止';
+    }
+}
+
+function updateContinuousModeButton() {
+    const button = document.getElementById('continuousModeBtn');
+    if (button) {
+        button.textContent = `🔄 連続スキャン: ${continuousScanMode ? 'ON' : 'OFF'}`;
+    }
+}
+
+// === API通信（修正版） ===
 async function loadCustomersFromAPI() {
     showLoading(true);
     
@@ -180,7 +495,7 @@ async function recordEntryToAPI(customer, entryCount) {
     }
 }
 
-// ローカルストレージ
+// === ローカルストレージ ===
 function saveCustomersToLocal() {
     try {
         localStorage.setItem('customers', JSON.stringify(customers));
@@ -255,7 +570,7 @@ function loadProcessedCustomers() {
     }
 }
 
-// 画面制御
+// === 画面制御 ===
 function showMainScreen() {
     console.log('メイン画面表示');
     hideAllScreens();
@@ -274,8 +589,17 @@ function showQRScanScreen() {
         qrScreen.classList.remove('hidden');
     }
     
+    // ボタンの状態を更新
+    updatePauseResumeButton();
+    updateContinuousModeButton();
+    
+    // スキャナーを開始（カメラ初期化済みの場合は再開）
     setTimeout(() => {
-        startQRScanner();
+        if (html5QrCode && cameraInitialized) {
+            resumeQRScanner();
+        } else {
+            startQRScanner();
+        }
     }, 500);
 }
 
@@ -336,76 +660,7 @@ function hideAllScreens() {
     });
 }
 
-// QRスキャナー
-async function startQRScanner() {
-    if (isScanning) return;
-    
-    console.log('QRスキャナー開始試行...');
-    
-    try {
-        html5QrCode = new Html5Qrcode("qrReader");
-        isScanning = true;
-        
-        const config = {
-            fps: 10,
-            qrbox: { width: 250, height: 250 }
-        };
-        
-        await html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            onQRScanSuccess,
-            onQRScanError
-        );
-        
-        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-        console.log('QRスキャナー開始成功');
-        
-    } catch (error) {
-        console.error('QRスキャナーエラー:', error);
-        updateScanStatus('カメラが使用できません', 'error');
-    }
-}
-
-async function stopQRScanner() {
-    if (html5QrCode && isScanning) {
-        try {
-            await html5QrCode.stop();
-            html5QrCode.clear();
-            isScanning = false;
-            console.log('QRスキャナー停止完了');
-        } catch (error) {
-            console.error('QRスキャナー停止エラー:', error);
-            isScanning = false;
-        }
-    }
-}
-
-function onQRScanSuccess(decodedText) {
-    console.log('QR読み取り成功:', decodedText);
-    
-    playSuccessSound();
-    updateScanStatus('読み取り成功！', 'success');
-    
-    const customer = findCustomerByQR(decodedText);
-    
-    if (customer) {
-        stopQRScanner();
-        showCustomerInfo(customer);
-    } else {
-        playErrorSound();
-        updateScanStatus('顧客が見つかりません', 'error');
-        
-        setTimeout(() => {
-            updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-        }, 3000);
-    }
-}
-
-function onQRScanError(errorMessage) {
-    // エラーは頻繁なので無視
-}
-
+// === 検索・顧客情報表示 ===
 function findCustomerByQR(qrText) {
     return customers.find(c => 
         c.qrCode === qrText || 
@@ -422,7 +677,6 @@ function updateScanStatus(message, status) {
     }
 }
 
-// 検索
 function performSearch() {
     console.log('検索実行');
     const searchInput = document.getElementById('searchInput');
@@ -507,7 +761,7 @@ function safeSetTextContent(elementId, text) {
     }
 }
 
-// 入場処理
+// === 入場処理 ===
 function processEntry() {
     if (!currentCustomer) {
         showMessage('顧客が選択されていません');
@@ -540,8 +794,10 @@ function processEntry() {
     showCompletionScreen(processedCustomer);
 }
 
+// === 改良版: 入場完了後の処理 ===
 function showCompletionScreen(customer) {
-    console.log('完了画面表示');
+    console.log('🎉 入場完了画面表示');
+    
     hideAllScreens();
     
     const completionScreen = document.getElementById('completionScreen');
@@ -556,13 +812,20 @@ function showCompletionScreen(customer) {
     
     updateStats();
     
-    // 3秒後に自動的にメイン画面へ
+    // 連続スキャンモードと自動復帰設定に応じて処理
+    const autoReturnTime = continuousScanMode ? 1500 : 3000;
+    
     setTimeout(() => {
-        showMainScreen();
-    }, 3000);
+        if (continuousScanMode && autoReturnToScan && html5QrCode && cameraInitialized) {
+            // 連続モードの場合、スキャン画面に戻る
+            showQRScanScreen();
+        } else {
+            showMainScreen();
+        }
+    }, autoReturnTime);
 }
 
-// 統計更新
+// === 統計更新 ===
 function updateStats() {
     const totalProcessed = processedCustomers.length;
     const totalTickets = processedCustomers.reduce((sum, customer) => sum + (customer.entryCount || customer.tickets || 1), 0);
@@ -582,7 +845,7 @@ function updateStats() {
     }
 }
 
-// データ管理機能
+// === データ管理機能（簡略版） ===
 function displayCustomerList() {
     const listElement = document.getElementById('customerList');
     const statsElement = document.getElementById('customerListStats');
@@ -795,7 +1058,7 @@ function clearEntryData() {
     }
 }
 
-// ユーティリティ
+// === ユーティリティ ===
 function showLoading(show) {
     const loading = document.getElementById('loading');
     if (loading) {
@@ -807,11 +1070,18 @@ function showLoading(show) {
     }
 }
 
-function showMessage(message) {
+function showMessage(message, type = 'info') {
     console.log('メッセージ:', message);
     
     const existingMessages = document.querySelectorAll('.app-message');
     existingMessages.forEach(msg => msg.remove());
+    
+    const colors = {
+        success: '#4CAF50',
+        error: '#f44336', 
+        warning: '#FF9800',
+        info: '#2196F3'
+    };
     
     const messageDiv = document.createElement('div');
     messageDiv.className = 'app-message';
@@ -821,7 +1091,7 @@ function showMessage(message) {
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: #2196F3;
+        background: ${colors[type] || colors.info};
         color: white;
         padding: 15px 25px;
         border-radius: 8px;
@@ -889,7 +1159,13 @@ function getDeviceId() {
     return deviceId;
 }
 
-// Service Worker登録
+// === ページ離脱時のクリーンアップ ===
+window.addEventListener('beforeunload', function() {
+    console.log('👋 アプリ終了 - カメラリソース解放');
+    completelyStopScanner();
+});
+
+// === Service Worker登録 ===
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
         .then(registration => {
@@ -900,4 +1176,4 @@ if ('serviceWorker' in navigator) {
         });
 }
 
-console.log('🚀 script.js 読み込み完了');
+console.log('🚀 カメラ許可問題解決版 script.js 読み込み完了');
