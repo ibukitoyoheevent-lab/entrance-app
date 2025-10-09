@@ -1015,6 +1015,263 @@
     <p>処理中...</p>
   </div>
 
-  <script src="script.js"></script>
+  <script>
+    // 基本的なイベントリスナーの設定
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('アプリが読み込まれました');
+      
+      // 画面要素の取得
+      const mainScreen = document.getElementById('mainScreen');
+      const qrScanScreen = document.getElementById('qrScanScreen');
+      const manualEntryScreen = document.getElementById('manualEntryScreen');
+      const customerInfoScreen = document.getElementById('customerInfoScreen');
+      const completionScreen = document.getElementById('completionScreen');
+      const dataMenuScreen = document.getElementById('dataMenuScreen');
+      const customerListScreen = document.getElementById('customerListScreen');
+      const entryListScreen = document.getElementById('entryListScreen');
+      const loading = document.getElementById('loading');
+      
+      // 画面切り替え関数
+      function showScreen(screenId) {
+        console.log('画面切り替え:', screenId);
+        
+        // 全ての画面を非表示
+        const screens = [mainScreen, qrScanScreen, manualEntryScreen, customerInfoScreen, 
+                        completionScreen, dataMenuScreen, customerListScreen, entryListScreen];
+        screens.forEach(screen => {
+          if (screen) screen.classList.add('hidden');
+        });
+        
+        // 指定された画面を表示
+        const targetScreen = document.getElementById(screenId);
+        if (targetScreen) {
+          targetScreen.classList.remove('hidden');
+        }
+      }
+      
+      // ボタンクリック時のテスト関数
+      function handleButtonClick(buttonId, action) {
+        console.log(`ボタンクリック: ${buttonId} - ${action}`);
+        alert(`${buttonId}がクリックされました！\n機能: ${action}`);
+      }
+      
+      // メイン画面のボタン
+      const startQRScanBtn = document.getElementById('startQRScan');
+      if (startQRScanBtn) {
+        startQRScanBtn.addEventListener('click', function() {
+          console.log('QRスキャン開始ボタンクリック');
+          showScreen('qrScanScreen');
+        });
+      }
+      
+      const manualEntryBtn = document.getElementById('manualEntry');
+      if (manualEntryBtn) {
+        manualEntryBtn.addEventListener('click', function() {
+          console.log('手動入力ボタンクリック');
+          showScreen('manualEntryScreen');
+        });
+      }
+      
+      const updateBtn = document.getElementById('updateBtn');
+      if (updateBtn) {
+        updateBtn.addEventListener('click', function() {
+          handleButtonClick('データ更新', 'Google Sheetsからデータを更新します');
+        });
+      }
+      
+      const menuBtn = document.getElementById('menuBtn');
+      if (menuBtn) {
+        menuBtn.addEventListener('click', function() {
+          console.log('データ管理メニューボタンクリック');
+          showScreen('dataMenuScreen');
+        });
+      }
+      
+      // QRスキャン画面のボタン
+      const stopQRScanBtn = document.getElementById('stopQRScan');
+      if (stopQRScanBtn) {
+        stopQRScanBtn.addEventListener('click', function() {
+          console.log('QRスキャン停止ボタンクリック');
+          showScreen('mainScreen');
+        });
+      }
+      
+      const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+      if (pauseResumeBtn) {
+        pauseResumeBtn.addEventListener('click', function() {
+          const currentText = pauseResumeBtn.textContent;
+          if (currentText.includes('一時停止')) {
+            pauseResumeBtn.innerHTML = '▶️ 再開';
+            handleButtonClick('カメラ一時停止', 'カメラを一時停止しました');
+          } else {
+            pauseResumeBtn.innerHTML = '⏸️ 一時停止';
+            handleButtonClick('カメラ再開', 'カメラを再開しました');
+          }
+        });
+      }
+      
+      const continuousModeBtn = document.getElementById('continuousModeBtn');
+      if (continuousModeBtn) {
+        continuousModeBtn.addEventListener('click', function() {
+          const currentText = continuousModeBtn.textContent;
+          if (currentText.includes('ON')) {
+            continuousModeBtn.innerHTML = '🔄 連続スキャン: OFF';
+            handleButtonClick('連続スキャンOFF', '連続スキャンモードを無効にしました');
+          } else {
+            continuousModeBtn.innerHTML = '🔄 連続スキャン: ON';
+            handleButtonClick('連続スキャンON', '連続スキャンモードを有効にしました');
+          }
+        });
+      }
+      
+      const switchToManualBtn = document.getElementById('switchToManual');
+      if (switchToManualBtn) {
+        switchToManualBtn.addEventListener('click', function() {
+          console.log('手動入力切り替えボタンクリック');
+          showScreen('manualEntryScreen');
+        });
+      }
+      
+      // 手動入力画面のボタン
+      const backToMainBtn = document.getElementById('backToMain');
+      if (backToMainBtn) {
+        backToMainBtn.addEventListener('click', function() {
+          console.log('メイン画面に戻るボタンクリック');
+          showScreen('mainScreen');
+        });
+      }
+      
+      const searchButton = document.getElementById('searchButton');
+      if (searchButton) {
+        searchButton.addEventListener('click', function() {
+          const searchInput = document.getElementById('searchInput');
+          const query = searchInput ? searchInput.value : '';
+          handleButtonClick('検索', `検索クエリ: "${query}"`);
+          
+          // テスト用の検索結果を表示
+          if (query && (query === '634' || query === '183' || query === '631')) {
+            showScreen('customerInfoScreen');
+            // テスト用の顧客情報を表示
+            document.getElementById('customerTicket').textContent = query;
+            document.getElementById('customerName').textContent = 'テスト 太郎';
+            document.getElementById('customerEmail').textContent = 'test@example.com';
+            document.getElementById('customerTickets').textContent = '2';
+            document.getElementById('customerSeat').textContent = 'A-12';
+          }
+        });
+      }
+      
+      // 顧客情報画面のボタン
+      const backToSearchBtn = document.getElementById('backToSearch');
+      if (backToSearchBtn) {
+        backToSearchBtn.addEventListener('click', function() {
+          console.log('検索画面に戻るボタンクリック');
+          showScreen('manualEntryScreen');
+        });
+      }
+      
+      const confirmEntryBtn = document.getElementById('confirmEntry');
+      if (confirmEntryBtn) {
+        confirmEntryBtn.addEventListener('click', function() {
+          const entryCount = document.getElementById('entryCountInput').value;
+          handleButtonClick('入場確定', `${entryCount}名の入場を確定しました`);
+          
+          // 完了画面に遷移
+          showScreen('completionScreen');
+          // 完了画面の情報を更新
+          document.getElementById('completedCustomerName').textContent = document.getElementById('customerName').textContent;
+          document.getElementById('completedTicketNumber').textContent = document.getElementById('customerTicket').textContent;
+          document.getElementById('completedTickets').textContent = entryCount;
+          document.getElementById('entryTime').textContent = new Date().toLocaleString('ja-JP');
+        });
+      }
+      
+      // 完了画面のボタン
+      const nextCustomerBtn = document.getElementById('nextCustomer');
+      if (nextCustomerBtn) {
+        nextCustomerBtn.addEventListener('click', function() {
+          console.log('次の顧客処理ボタンクリック');
+          showScreen('mainScreen');
+        });
+      }
+      
+      // データ管理メニューのボタン
+      const backToMainFromMenuBtn = document.getElementById('backToMainFromMenu');
+      if (backToMainFromMenuBtn) {
+        backToMainFromMenuBtn.addEventListener('click', function() {
+          console.log('メニューからメイン画面に戻るボタンクリック');
+          showScreen('mainScreen');
+        });
+      }
+      
+      const viewCustomersBtn = document.getElementById('viewCustomersBtn');
+      if (viewCustomersBtn) {
+        viewCustomersBtn.addEventListener('click', function() {
+          console.log('顧客データ一覧ボタンクリック');
+          showScreen('customerListScreen');
+        });
+      }
+      
+      const viewEntriesBtn = document.getElementById('viewEntriesBtn');
+      if (viewEntriesBtn) {
+        viewEntriesBtn.addEventListener('click', function() {
+          console.log('入場記録一覧ボタンクリック');
+          showScreen('entryListScreen');
+        });
+      }
+      
+      const exportDataBtn = document.getElementById('exportDataBtn');
+      if (exportDataBtn) {
+        exportDataBtn.addEventListener('click', function() {
+          handleButtonClick('データエクスポート', 'データをCSV形式でエクスポートします');
+        });
+      }
+      
+      const clearDataBtn = document.getElementById('clearDataBtn');
+      if (clearDataBtn) {
+        clearDataBtn.addEventListener('click', function() {
+          if (confirm('入場記録を全て削除しますか？この操作は取り消せません。')) {
+            handleButtonClick('データクリア', '入場記録をクリアしました');
+          }
+        });
+      }
+      
+      // 顧客一覧画面のボタン
+      const backToMenuFromCustomersBtn = document.getElementById('backToMenuFromCustomers');
+      if (backToMenuFromCustomersBtn) {
+        backToMenuFromCustomersBtn.addEventListener('click', function() {
+          console.log('顧客一覧からメニューに戻るボタンクリック');
+          showScreen('dataMenuScreen');
+        });
+      }
+      
+      // 入場記録一覧画面のボタン
+      const backToMenuFromEntriesBtn = document.getElementById('backToMenuFromEntries');
+      if (backToMenuFromEntriesBtn) {
+        backToMenuFromEntriesBtn.addEventListener('click', function() {
+          console.log('入場記録一覧からメニューに戻るボタンクリック');
+          showScreen('dataMenuScreen');
+        });
+      }
+      
+      // 初期化完了メッセージ
+      console.log('全てのイベントリスナーが設定されました');
+      
+      // ボタンの反応テスト
+      const allButtons = document.querySelectorAll('button');
+      console.log(`合計 ${allButtons.length} 個のボタンが見つかりました`);
+      
+      // ボタンにクリック時の視覚的フィードバックを追加
+      allButtons.forEach((button, index) => {
+        button.addEventListener('click', function() {
+          // クリック時のアニメーション効果
+          button.style.transform = 'scale(0.95)';
+          setTimeout(() => {
+            button.style.transform = '';
+          }, 150);
+        });
+      });
+    });
+  </script>
 </body>
 </html>
