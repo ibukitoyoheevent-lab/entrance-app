@@ -1,225 +1,163 @@
-<!DOCTYPE html>
-<html lang="ja">
+Found the following matches for 'id="(mainScreen|qrScanScreen|manualEntryScreen|customerInfoScreen|completionScreen|dataMenuScreen|customerListScreen|entryListScreen)"' (regex pattern, case sensitive) in document:
 
-    <script src="script.js"></script>
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>入場管理アプリ</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2196F3">
-</head>
-<body>
-    <!-- ヘッダー -->
-    <header class="header">
-        <h1>🎫 入場管理アプリ</h1>
-        <div class="header-buttons">
-            <button id="updateBtn" class="update-btn">📥 データ更新</button>
-            <button id="menuBtn" class="update-btn">📋 データ管理</button>
-        </div>
-    </header>
-
-    <!-- メイン画面 -->
-    <main class="main" id="mainScreen">
-        <div class="card">
-            <h2>QRコードをスキャン</h2>
-            <button id="startQRScan" class="scan-btn">📷 QRコード読み取り</button>
-            <button id="manualEntry" class="scan-btn" style="background: linear-gradient(45deg, #FF9800, #FFB74D); margin-top: 1rem;">📝 手動でチケット番号入力</button>
-        </div>
-        
-        <div class="card">
-            <h3>📊 本日の状況</h3>
-            <div id="stats" class="stats">
-                <div class="stat-item">
-                    <div class="stat-number">0</div>
-                    <div class="stat-label">入場者数</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-number">0</div>
-                    <div class="stat-label">総チケット数</div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- データ管理メニュー画面 -->
-    <div class="screen hidden" id="dataMenuScreen">
-        <div class="scan-header">
-            <button id="backToMainFromMenu" class="back-btn">← 戻る</button>
-            <h2>📋 データ管理</h2>
-        </div>
-        <div class="menu-grid">
-            <button id="viewCustomersBtn" class="menu-item">
-                <div class="menu-icon">👥</div>
-                <div class="menu-title">顧客データ一覧</div>
-                <div class="menu-desc">全顧客データを表示</div>
-            </button>
-            <button id="viewEntriesBtn" class="menu-item">
-                <div class="menu-icon">📋</div>
-                <div class="menu-title">入場記録一覧</div>
-                <div class="menu-desc">入場履歴を表示</div>
-            </button>
-            <button id="exportDataBtn" class="menu-item">
-                <div class="menu-icon">💾</div>
-                <div class="menu-title">データエクスポート</div>
-                <div class="menu-desc">CSVでダウンロード</div>
-            </button>
-            <button id="clearDataBtn" class="menu-item danger">
-                <div class="menu-icon">🗑️</div>
-                <div class="menu-title">データクリア</div>
-                <div class="menu-desc">入場記録をリセット</div>
-            </button>
-        </div>
-    </div>
-
-    <!-- 顧客データ一覧画面 -->
-    <div class="screen hidden" id="customerListScreen">
-        <div class="scan-header">
-            <button id="backToMenuFromCustomers" class="back-btn">← 戻る</button>
-            <h2>👥 顧客データ一覧</h2>
-        </div>
-        <div class="list-controls">
-            <input type="text" id="customerSearchInput" class="search-input" placeholder="名前、チケット番号、メールで検索...">
-            <select id="customerFilterSelect" class="filter-select">
-                <option value="all">全て表示</option>
-                <option value="entered">入場済み</option>
-                <option value="not-entered">未入場</option>
-            </select>
-        </div>
-        <div class="list-stats">
-            <span id="customerListStats">顧客データを読み込み中...</span>
-        </div>
-        <div id="customerList" class="data-list"></div>
-    </div>
-
-    <!-- 入場記録一覧画面 -->
-    <div class="screen hidden" id="entryListScreen">
-        <div class="scan-header">
-            <button id="backToMenuFromEntries" class="back-btn">← 戻る</button>
-            <h2>📋 入場記録一覧</h2>
-        </div>
-        <div class="list-controls">
-            <input type="text" id="entrySearchInput" class="search-input" placeholder="名前、チケット番号で検索...">
-            <input type="date" id="entryDateFilter" class="date-filter">
-        </div>
-        <div class="list-stats">
-            <span id="entryListStats">入場記録を読み込み中...</span>
-        </div>
-        <div id="entryList" class="data-list"></div>
-    </div>
-
-    <!-- QRスキャン画面 -->
-    <div class="screen hidden" id="qrScanScreen">
-        <div class="scan-header">
-            <button id="stopQRScan" class="back-btn">← 戻る</button>
-            <h2>QRコード読み取り</h2>
-        </div>
-        <div id="qrReader" style="width: 100%;"></div>
-        <p id="qrScanStatus" class="scan-status">QRコードをカメラに向けてください</p>
-        <button id="switchToManual" class="camera-btn" style="margin-top: 1rem;">📝 手動入力に切り替え</button>
-    </div>
-    
-    <!-- QRスキャン画面内に追加 -->
-<div class="scan-controls"> 
-    <button id="pauseResumeBtn" style="margin: 8px; padding: 12px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; background: #FF9800; color: white;">
-        ⏸️ 一時停止
-    </button>
-    <button id="continuousModeBtn" style="margin: 8px; padding: 12px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; background: #4CAF50; color: white;">
-        🔄 連続スキャン: ON
-    </button>
-</div>
-
-
-    <!-- 手動入力画面 -->
-    <div class="screen hidden" id="manualEntryScreen">
-        <div class="scan-header">
-            <button id="backToMain" class="back-btn">← 戻る</button>
-            <h2>手動検索</h2>
-        </div>
-        <div class="manual-input">
-            <h3>🔍 顧客検索</h3>
-            <p>チケット番号、名前、メールアドレスで検索できます</p>
-            <input type="text" id="searchInput" class="ticket-input" placeholder="チケット番号または名前を入力">
-            <button id="searchButton" class="search-btn">🔍 検索</button>
-            <div class="test-numbers">
-                <p><strong>テスト用チケット番号:</strong> 634, 183, 631</p>
-            </div>
-        </div>
-        <div id="searchResult"></div>
-    </div>
-
-    <!-- 顧客情報画面 -->
-    <div class="screen hidden" id="customerInfoScreen">
-        <div class="customer-header">
-            <button id="backToSearch" class="back-btn">← 戻る</button>
-            <h2>👤 顧客情報</h2>
-        </div>
-        
-        <div class="customer-info">
-            <div class="info-item">
-                <span class="label">チケット番号:</span>
-                <span id="customerTicket">-</span>
-            </div>
-            <div class="info-item">
-                <span class="label">お名前:</span>
-                <span id="customerName">-</span>
-            </div>
-            <div class="info-item">
-                <span class="label">メールアドレス:</span>
-                <span id="customerEmail">-</span>
-            </div>
-            <div class="info-item">
-                <span class="label">購入枚数:</span>
-                <span id="customerTickets">-</span>
-            </div>
-            <div class="info-item">
-                <span class="label">座席番号:</span>
-                <span id="customerSeat">-</span>
-            </div>
-        </div>
-
-        <!-- 入場履歴表示 -->
-        <div id="entryHistory" class="entry-history hidden">
-            <h3>📝 入場履歴</h3>
-            <div id="entryHistoryList"></div>
-        </div>
-
-        <div class="entry-section">
-            <h3>入場処理</h3>
-            <div class="input-group">
-                <label for="entryCountInput">入場人数:</label>
-                <input type="number" id="entryCountInput" min="1" max="10" value="1">
-            </div>
-            <button id="confirmEntry" class="entry-btn">✅ 入場を確定</button>
-        </div>
-    </div>
-
-    <!-- 完了画面 -->
-    <div class="screen hidden" id="completionScreen">
-        <div class="complete-content">
-            <div class="success-icon">✅</div>
-            <h2>入場完了</h2>
-            <div class="completion-details">
-                <p><strong>お名前:</strong> <span id="completedCustomerName">-</span></p>
-                <p><strong>チケット番号:</strong> <span id="completedTicketNumber">-</span></p>
-                <p><strong>入場人数:</strong> <span id="completedTickets">-</span></p>
-                <p><strong>入場時刻:</strong> <span id="entryTime">-</span></p>
-            </div>
-            <button id="nextCustomer" class="next-btn">次の顧客を処理</button>
-        </div>
-    </div>
-
-    <!-- ローディング -->
-    <div class="loading hidden" id="loading">
-        <div class="spinner"></div>
-        <p>処理中...</p>
-    </div>
-
-    <!-- QRコードライブラリ -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <script src="script.js"></script>
-</body>
-</html>
-
+618-          <!-- ヘッダー -->
+619-          <header class="header">
+620-            <h1>🎫 入場管理アプリ</h1>
+621-            <div class="header-buttons">
+622-              <button id="updateBtn" class="update-btn">📥 データ更新</button>
+623-              <button id="menuBtn" class="update-btn">📋 データ管理</button>
+624-            </div>
+625-          </header>
+626-      
+627-          <!-- メイン画面 -->
+628:          <main class="main" id="mainScreen">
+629-            <div class="card">
+630-              <h2>QRコードをスキャン</h2>
+631-              <button id="startQRScan" class="scan-btn">📷 QRコード読み取り</button>
+632-              <button id="manualEntry" class="scan-btn" style="background: #ff9800; margin-top: 12px">
+633-                📝 手動でチケット番号入力
+634-              </button>
+635-            </div>
+636-      
+637-            <div class="card">
+638-              <h3>📊 本日の状況</h3>
+--
+643-                </div>
+644-                <div class="stat-item">
+645-                  <div class="stat-number">0</div>
+646-                  <div class="stat-label">総チケット数</div>
+647-                </div>
+648-              </div>
+649-            </div>
+650-          </main>
+651-      
+652-          <!-- QRスキャン画面 -->
+653:          <div class="screen hidden" id="qrScanScreen">
+654-            <div class="scan-header">
+655-              <button id="stopQRScan" class="back-btn">← 戻る</button>
+656-              <h2>QRコード読み取り</h2>
+657-            </div>
+658-            <div id="qrReader"></div>
+659-            <p id="qrScanStatus" class="scan-status">QRコードをカメラに向けてください</p>
+660-      
+661-            <div class="scan-controls">
+662-              <button id="pauseResumeBtn" class="camera-btn" style="background: #ff9800">⏸️ 一時停止</button>
+663-              <button id="continuousModeBtn" class="camera-btn" style="background: #4caf50">🔄 連続スキャン: ON</button>
+664-            </div>
+665-      
+666-            <button id="switchToManual" class="camera-btn" style="width: 100%; margin-top: 16px">
+667-              📝 手動入力に切り替え
+668-            </button>
+669-          </div>
+670-      
+671-          <!-- 手動入力画面 -->
+672:          <div class="screen hidden" id="manualEntryScreen">
+673-            <div class="manual-header">
+674-              <button id="backToMain" class="back-btn">← 戻る</button>
+675-              <h2>手動検索</h2>
+676-            </div>
+677-            <div class="manual-input">
+678-              <h3>🔍 顧客検索</h3>
+679-              <p>チケット番号、名前、メールアドレスで検索できます</p>
+680-              <input type="text" id="searchInput" class="ticket-input" placeholder="チケット番号または名前を入力" />
+681-              <button id="searchButton" class="search-btn">🔍 検索</button>
+682-              <div class="test-numbers">
+683-                <p><strong>テスト用チケット番号:</strong> 634, 183, 631</p>
+684-              </div>
+685-            </div>
+686-            <div id="searchResult"></div>
+687-          </div>
+688-      
+689-          <!-- 顧客情報画面 -->
+690:          <div class="screen hidden" id="customerInfoScreen">
+691-            <div class="customer-header">
+692-              <button id="backToSearch" class="back-btn">← 戻る</button>
+693-              <h2>👤 顧客情報</h2>
+694-            </div>
+695-      
+696-            <div class="customer-info">
+697-              <div class="info-item">
+698-                <span class="label">チケット番号:</span>
+699-                <span id="customerTicket">-</span>
+700-              </div>
+--
+726-              <h3>入場処理</h3>
+727-              <div class="input-group">
+728-                <label for="entryCountInput">入場人数:</label>
+729-                <input type="number" id="entryCountInput" min="1" max="10" value="1" />
+730-              </div>
+731-              <button id="confirmEntry" class="entry-btn">✅ 入場を確定</button>
+732-            </div>
+733-          </div>
+734-      
+735-          <!-- 完了画面 -->
+736:          <div class="screen hidden" id="completionScreen">
+737-            <div class="complete-content">
+738-              <div class="success-icon">✅</div>
+739-              <h2>入場完了</h2>
+740-              <div class="completion-details">
+741-                <p><strong>お名前:</strong> <span id="completedCustomerName">-</span></p>
+742-                <p><strong>チケット番号:</strong> <span id="completedTicketNumber">-</span></p>
+743-                <p><strong>入場人数:</strong> <span id="completedTickets">-</span></p>
+744-                <p><strong>入場時刻:</strong> <span id="entryTime">-</span></p>
+745-              </div>
+746-              <button id="nextCustomer" class="next-btn">次の顧客を処理</button>
+747-            </div>
+748-          </div>
+749-      
+750-          <!-- データ管理メニュー画面 -->
+751:          <div class="screen hidden" id="dataMenuScreen">
+752-            <div class="scan-header">
+753-              <button id="backToMainFromMenu" class="back-btn">← 戻る</button>
+754-              <h2>📋 データ管理</h2>
+755-            </div>
+756-            <div class="menu-grid">
+757-              <button id="viewCustomersBtn" class="menu-item">
+758-                <div class="menu-icon">👥</div>
+759-                <div class="menu-title">顧客データ一覧</div>
+760-                <div class="menu-desc">全顧客データを表示</div>
+761-              </button>
+--
+771-              </button>
+772-              <button id="clearDataBtn" class="menu-item danger">
+773-                <div class="menu-icon">🗑️</div>
+774-                <div class="menu-title">データクリア</div>
+775-                <div class="menu-desc">入場記録をリセット</div>
+776-              </button>
+777-            </div>
+778-          </div>
+779-      
+780-          <!-- 顧客データ一覧画面 -->
+781:          <div class="screen hidden" id="customerListScreen">
+782-            <div class="scan-header">
+783-              <button id="backToMenuFromCustomers" class="back-btn">← 戻る</button>
+784-              <h2>👥 顧客データ一覧</h2>
+785-            </div>
+786-            <div class="list-controls">
+787-              <input
+788-                type="text"
+789-                id="customerSearchInput"
+790-                class="search-input"
+791-                placeholder="名前、チケット番号、メールで検索..."
+--
+796-                <option value="not-entered">未入場</option>
+797-              </select>
+798-            </div>
+799-            <div class="list-stats">
+800-              <span id="customerListStats">顧客データを読み込み中...</span>
+801-            </div>
+802-            <div id="customerList" class="data-list"></div>
+803-          </div>
+804-      
+805-          <!-- 入場記録一覧画面 -->
+806:          <div class="screen hidden" id="entryListScreen">
+807-            <div class="scan-header">
+808-              <button id="backToMenuFromEntries" class="back-btn">← 戻る</button>
+809-              <h2>📋 入場記録一覧</h2>
+810-            </div>
+811-            <div class="list-controls">
+812-              <input type="text" id="entrySearchInput" class="search-input" placeholder="名前、チケット番号で検索..." />
+813-              <input type="date" id="entryDateFilter" class="date-filter" />
+814-            </div>
+815-            <div class="list-stats">
+816-              <span id="entryListStats">入場記録を読み込み中...</span>
