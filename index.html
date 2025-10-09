@@ -1,163 +1,1020 @@
-Found the following matches for 'id="(mainScreen|qrScanScreen|manualEntryScreen|customerInfoScreen|completionScreen|dataMenuScreen|customerListScreen|entryListScreen)"' (regex pattern, case sensitive) in document:
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>入場管理アプリ</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196F3">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    /* リセットとベース設定 */
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    }
 
-618-          <!-- ヘッダー -->
-619-          <header class="header">
-620-            <h1>🎫 入場管理アプリ</h1>
-621-            <div class="header-buttons">
-622-              <button id="updateBtn" class="update-btn">📥 データ更新</button>
-623-              <button id="menuBtn" class="update-btn">📋 データ管理</button>
-624-            </div>
-625-          </header>
-626-      
-627-          <!-- メイン画面 -->
-628:          <main class="main" id="mainScreen">
-629-            <div class="card">
-630-              <h2>QRコードをスキャン</h2>
-631-              <button id="startQRScan" class="scan-btn">📷 QRコード読み取り</button>
-632-              <button id="manualEntry" class="scan-btn" style="background: #ff9800; margin-top: 12px">
-633-                📝 手動でチケット番号入力
-634-              </button>
-635-            </div>
-636-      
-637-            <div class="card">
-638-              <h3>📊 本日の状況</h3>
---
-643-                </div>
-644-                <div class="stat-item">
-645-                  <div class="stat-number">0</div>
-646-                  <div class="stat-label">総チケット数</div>
-647-                </div>
-648-              </div>
-649-            </div>
-650-          </main>
-651-      
-652-          <!-- QRスキャン画面 -->
-653:          <div class="screen hidden" id="qrScanScreen">
-654-            <div class="scan-header">
-655-              <button id="stopQRScan" class="back-btn">← 戻る</button>
-656-              <h2>QRコード読み取り</h2>
-657-            </div>
-658-            <div id="qrReader"></div>
-659-            <p id="qrScanStatus" class="scan-status">QRコードをカメラに向けてください</p>
-660-      
-661-            <div class="scan-controls">
-662-              <button id="pauseResumeBtn" class="camera-btn" style="background: #ff9800">⏸️ 一時停止</button>
-663-              <button id="continuousModeBtn" class="camera-btn" style="background: #4caf50">🔄 連続スキャン: ON</button>
-664-            </div>
-665-      
-666-            <button id="switchToManual" class="camera-btn" style="width: 100%; margin-top: 16px">
-667-              📝 手動入力に切り替え
-668-            </button>
-669-          </div>
-670-      
-671-          <!-- 手動入力画面 -->
-672:          <div class="screen hidden" id="manualEntryScreen">
-673-            <div class="manual-header">
-674-              <button id="backToMain" class="back-btn">← 戻る</button>
-675-              <h2>手動検索</h2>
-676-            </div>
-677-            <div class="manual-input">
-678-              <h3>🔍 顧客検索</h3>
-679-              <p>チケット番号、名前、メールアドレスで検索できます</p>
-680-              <input type="text" id="searchInput" class="ticket-input" placeholder="チケット番号または名前を入力" />
-681-              <button id="searchButton" class="search-btn">🔍 検索</button>
-682-              <div class="test-numbers">
-683-                <p><strong>テスト用チケット番号:</strong> 634, 183, 631</p>
-684-              </div>
-685-            </div>
-686-            <div id="searchResult"></div>
-687-          </div>
-688-      
-689-          <!-- 顧客情報画面 -->
-690:          <div class="screen hidden" id="customerInfoScreen">
-691-            <div class="customer-header">
-692-              <button id="backToSearch" class="back-btn">← 戻る</button>
-693-              <h2>👤 顧客情報</h2>
-694-            </div>
-695-      
-696-            <div class="customer-info">
-697-              <div class="info-item">
-698-                <span class="label">チケット番号:</span>
-699-                <span id="customerTicket">-</span>
-700-              </div>
---
-726-              <h3>入場処理</h3>
-727-              <div class="input-group">
-728-                <label for="entryCountInput">入場人数:</label>
-729-                <input type="number" id="entryCountInput" min="1" max="10" value="1" />
-730-              </div>
-731-              <button id="confirmEntry" class="entry-btn">✅ 入場を確定</button>
-732-            </div>
-733-          </div>
-734-      
-735-          <!-- 完了画面 -->
-736:          <div class="screen hidden" id="completionScreen">
-737-            <div class="complete-content">
-738-              <div class="success-icon">✅</div>
-739-              <h2>入場完了</h2>
-740-              <div class="completion-details">
-741-                <p><strong>お名前:</strong> <span id="completedCustomerName">-</span></p>
-742-                <p><strong>チケット番号:</strong> <span id="completedTicketNumber">-</span></p>
-743-                <p><strong>入場人数:</strong> <span id="completedTickets">-</span></p>
-744-                <p><strong>入場時刻:</strong> <span id="entryTime">-</span></p>
-745-              </div>
-746-              <button id="nextCustomer" class="next-btn">次の顧客を処理</button>
-747-            </div>
-748-          </div>
-749-      
-750-          <!-- データ管理メニュー画面 -->
-751:          <div class="screen hidden" id="dataMenuScreen">
-752-            <div class="scan-header">
-753-              <button id="backToMainFromMenu" class="back-btn">← 戻る</button>
-754-              <h2>📋 データ管理</h2>
-755-            </div>
-756-            <div class="menu-grid">
-757-              <button id="viewCustomersBtn" class="menu-item">
-758-                <div class="menu-icon">👥</div>
-759-                <div class="menu-title">顧客データ一覧</div>
-760-                <div class="menu-desc">全顧客データを表示</div>
-761-              </button>
---
-771-              </button>
-772-              <button id="clearDataBtn" class="menu-item danger">
-773-                <div class="menu-icon">🗑️</div>
-774-                <div class="menu-title">データクリア</div>
-775-                <div class="menu-desc">入場記録をリセット</div>
-776-              </button>
-777-            </div>
-778-          </div>
-779-      
-780-          <!-- 顧客データ一覧画面 -->
-781:          <div class="screen hidden" id="customerListScreen">
-782-            <div class="scan-header">
-783-              <button id="backToMenuFromCustomers" class="back-btn">← 戻る</button>
-784-              <h2>👥 顧客データ一覧</h2>
-785-            </div>
-786-            <div class="list-controls">
-787-              <input
-788-                type="text"
-789-                id="customerSearchInput"
-790-                class="search-input"
-791-                placeholder="名前、チケット番号、メールで検索..."
---
-796-                <option value="not-entered">未入場</option>
-797-              </select>
-798-            </div>
-799-            <div class="list-stats">
-800-              <span id="customerListStats">顧客データを読み込み中...</span>
-801-            </div>
-802-            <div id="customerList" class="data-list"></div>
-803-          </div>
-804-      
-805-          <!-- 入場記録一覧画面 -->
-806:          <div class="screen hidden" id="entryListScreen">
-807-            <div class="scan-header">
-808-              <button id="backToMenuFromEntries" class="back-btn">← 戻る</button>
-809-              <h2>📋 入場記録一覧</h2>
-810-            </div>
-811-            <div class="list-controls">
-812-              <input type="text" id="entrySearchInput" class="search-input" placeholder="名前、チケット番号で検索..." />
-813-              <input type="date" id="entryDateFilter" class="date-filter" />
-814-            </div>
-815-            <div class="list-stats">
-816-              <span id="entryListStats">入場記録を読み込み中...</span>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      margin: 0;
+      padding: 12px;
+      color: #333;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* コンテナ */
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 24px 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(10px);
+    }
+
+    /* ヘッダー */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 3px solid #e9ecef;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #2196f3;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ボタンベーススタイル */
+    button {
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      text-align: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      padding: 12px 20px;
+      position: relative;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* ボタンアニメーション */
+    button:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* プライマリボタン */
+    .btn-primary {
+      background: linear-gradient(145deg, #2196f3, #1976d2);
+      color: white;
+      box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3);
+      min-height: 56px;
+      font-size: 1.1rem;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(145deg, #1976d2, #1565c0);
+      box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+      transform: translateY(-2px);
+    }
+
+    /* セカンダリボタン */
+    .btn-secondary {
+      background: linear-gradient(145deg, #ff9800, #f57c00);
+      color: white;
+      box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3);
+      min-height: 56px;
+      font-size: 1.1rem;
+    }
+
+    .btn-secondary:hover {
+      background: linear-gradient(145deg, #f57c00, #ef6c00);
+      box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+      transform: translateY(-2px);
+    }
+
+    /* 成功ボタン */
+    .btn-success {
+      background: linear-gradient(145deg, #4caf50, #388e3c);
+      color: white;
+      box-shadow: 0 4px 16px rgba(76, 175, 80, 0.3);
+    }
+
+    .btn-success:hover {
+      background: linear-gradient(145deg, #388e3c, #2e7d32);
+      box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+      transform: translateY(-2px);
+    }
+
+    /* 警告ボタン */
+    .btn-warning {
+      background: linear-gradient(145deg, #ff9800, #f57c00);
+      color: white;
+      box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3);
+    }
+
+    .btn-warning:hover {
+      background: linear-gradient(145deg, #f57c00, #ef6c00);
+      transform: translateY(-2px);
+    }
+
+    /* 危険ボタン */
+    .btn-danger {
+      background: linear-gradient(145deg, #f44336, #d32f2f);
+      color: white;
+      box-shadow: 0 4px 16px rgba(244, 67, 54, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: linear-gradient(145deg, #d32f2f, #c62828);
+      transform: translateY(-2px);
+    }
+
+    /* 小さいボタン */
+    .btn-small {
+      min-height: 40px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+
+    /* 大きいボタン */
+    .btn-large {
+      min-height: 64px;
+      padding: 16px 32px;
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    /* 全幅ボタン */
+    .btn-full {
+      width: 100%;
+      margin: 8px 0;
+    }
+
+    /* カード */
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .card h2,
+    .card h3 {
+      margin: 0 0 20px 0;
+      color: #2196f3;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .card h2 {
+      font-size: 1.4rem;
+    }
+
+    .card h3 {
+      font-size: 1.2rem;
+    }
+
+    /* 統計表示 */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .stat-item {
+      background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+      padding: 20px 16px;
+      border-radius: 12px;
+      border: 2px solid #e9ecef;
+    }
+
+    .stat-number {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #2196f3;
+      margin-bottom: 8px;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.95rem;
+      color: #666;
+      font-weight: 600;
+    }
+
+    /* 画面管理 */
+    .screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      z-index: 1000;
+      padding: 12px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .screen .container {
+      min-height: calc(100vh - 24px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* 画面ヘッダー */
+    .screen-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e9ecef;
+      gap: 16px;
+    }
+
+    .screen-header h2 {
+      margin: 0;
+      flex: 1;
+      text-align: center;
+      color: #2196f3;
+      font-size: 1.4rem;
+      font-weight: 600;
+    }
+
+    /* QRコードリーダー */
+    #qrReader {
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto 24px;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    /* スキャンコントロール */
+    .scan-controls {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .scan-controls > button {
+      margin: 6px;
+      min-width: 120px;
+    }
+
+    /* ステータス表示 */
+    .scan-status {
+      text-align: center;
+      margin: 20px 0;
+      padding: 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.95);
+      border: 2px solid #e9ecef;
+      transition: all 0.3s ease;
+    }
+
+    .scan-status.scanning {
+      color: #2196f3;
+      border-color: #2196f3;
+      background: rgba(33, 150, 243, 0.1);
+    }
+
+    .scan-status.success {
+      color: #4caf50;
+      border-color: #4caf50;
+      background: rgba(76, 175, 80, 0.1);
+    }
+
+    .scan-status.error {
+      color: #f44336;
+      border-color: #f44336;
+      background: rgba(244, 67, 54, 0.1);
+    }
+
+    .scan-status.paused {
+      color: #ff9800;
+      border-color: #ff9800;
+      background: rgba(255, 152, 0, 0.1);
+    }
+
+    /* 入力フィールド */
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #555;
+      font-size: 1rem;
+    }
+
+    input[type='text'],
+    input[type='number'],
+    input[type='search'],
+    input[type='date'] {
+      width: 100%;
+      padding: 16px 20px;
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      background: white;
+      transition: all 0.2s ease;
+      min-height: 48px;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #2196f3;
+      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+    }
+
+    .search-input {
+      text-align: center;
+      font-weight: 600;
+    }
+
+    /* 顧客情報表示 */
+    .customer-info {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 1rem;
+    }
+
+    .info-item:last-child {
+      border-bottom: none;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #555;
+      min-width: 120px;
+    }
+
+    .info-value {
+      font-weight: 500;
+      color: #333;
+      text-align: right;
+      flex: 1;
+    }
+
+    /* エントリーセクション */
+    .entry-section {
+      background: linear-gradient(145deg, #4caf50, #45a049);
+      color: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-top: 20px;
+      box-shadow: 0 6px 24px rgba(76, 175, 80, 0.3);
+    }
+
+    .entry-section h3 {
+      color: white;
+      margin-bottom: 20px;
+      text-align: center;
+      font-size: 1.2rem;
+    }
+
+    .entry-section .input-group input {
+      background: white;
+      color: #333;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.3rem;
+    }
+
+    .entry-section button {
+      background: white;
+      color: #4caf50;
+      font-weight: 700;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 完了画面 */
+    .complete-content {
+      text-align: center;
+      padding: 40px 24px;
+      background: linear-gradient(145deg, #4caf50, #45a049);
+      color: white;
+      border-radius: 20px;
+      margin: 20px 0;
+      box-shadow: 0 8px 32px rgba(76, 175, 80, 0.4);
+    }
+
+    .success-icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.1);
+      }
+    }
+
+    .completion-details {
+      margin: 20px 0;
+      text-align: left;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 20px;
+      border-radius: 12px;
+    }
+
+    .completion-details p {
+      margin: 12px 0;
+      font-weight: 500;
+    }
+
+    /* メニューグリッド */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .menu-item {
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 16px;
+      padding: 20px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .menu-item:hover {
+      border-color: #2196f3;
+      box-shadow: 0 4px 20px rgba(33, 150, 243, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .menu-item.danger {
+      border-color: #f44336;
+      color: #f44336;
+    }
+
+    .menu-item.danger:hover {
+      border-color: #d32f2f;
+      box-shadow: 0 4px 20px rgba(244, 67, 54, 0.15);
+    }
+
+    .menu-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .menu-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+      line-height: 1.2;
+    }
+
+    .menu-desc {
+      font-size: 0.8rem;
+      color: #666;
+      line-height: 1.2;
+    }
+
+    /* リストコントロール */
+    .list-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .list-stats {
+      margin-bottom: 20px;
+      font-weight: 600;
+      color: #666;
+      text-align: center;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 8px;
+    }
+
+    /* データリスト */
+    .data-list {
+      max-height: 60vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .list-item {
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .list-item:hover {
+      border-color: #2196f3;
+      box-shadow: 0 4px 16px rgba(33, 150, 243, 0.1);
+    }
+
+    .list-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .customer-name {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #333;
+    }
+
+    .entry-status {
+      font-size: 0.8rem;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-weight: 600;
+    }
+
+    .entry-status.entered {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .entry-status.pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .list-item-details {
+      font-size: 0.9rem;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    /* 検索結果 */
+    .search-result {
+      margin-top: 20px;
+    }
+
+    .customer-result {
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .customer-result:hover {
+      border-color: #2196f3;
+      box-shadow: 0 4px 16px rgba(33, 150, 243, 0.1);
+    }
+
+    /* メッセージ */
+    .no-results,
+    .no-data {
+      text-align: center;
+      color: #666;
+      padding: 40px 20px;
+      font-style: italic;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 12px;
+    }
+
+    /* テスト番号 */
+    .test-numbers {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(33, 150, 243, 0.1);
+      border-radius: 12px;
+      font-size: 0.9rem;
+      text-align: center;
+      border: 1px solid rgba(33, 150, 243, 0.2);
+    }
+
+    /* ローディング */
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      color: white;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* レスポンシブデザイン */
+    @media (max-width: 480px) {
+      body {
+        padding: 8px;
+      }
+
+      .container {
+        padding: 16px 12px;
+      }
+
+      .menu-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .menu-item {
+        min-height: 100px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .header h1 {
+        font-size: 1.5rem;
+      }
+
+      .screen-header {
+        flex-wrap: wrap;
+        text-align: center;
+      }
+
+      .list-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .info-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .info-value {
+        text-align: left;
+      }
+    }
+
+    /* 横向き対応 */
+    @media (orientation: landscape) and (max-height: 500px) {
+      .complete-content {
+        padding: 20px;
+      }
+
+      .success-icon {
+        font-size: 3rem;
+        margin-bottom: 12px;
+      }
+
+      #qrReader {
+        max-width: 280px;
+        margin-bottom: 16px;
+      }
+    }
+
+    /* タッチデバイス最適化 */
+    @media (pointer: coarse) {
+      button {
+        min-height: 48px;
+        padding: 12px 20px;
+      }
+
+      .btn-large {
+        min-height: 56px;
+      }
+
+      input {
+        min-height: 48px;
+        font-size: 16px; /* ズーム防止 */
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- メイン画面 -->
+  <div class="container" id="mainScreen">
+    <div class="header">
+      <h1>🎫 入場管理アプリ</h1>
+      <div class="header-buttons">
+        <button id="updateBtn" class="btn-success btn-small">📥 データ更新</button>
+        <button id="menuBtn" class="btn-success btn-small">📋 データ管理</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>QRコードをスキャン</h2>
+      <button id="startQRScan" class="btn-primary btn-large btn-full">📷 QRコード読み取り</button>
+      <button id="manualEntry" class="btn-secondary btn-large btn-full">📝 手動でチケット番号入力</button>
+    </div>
+
+    <div class="card">
+      <h3>📊 本日の状況</h3>
+      <div id="stats" class="stats">
+        <div class="stat-item">
+          <div class="stat-number" id="entryCount">0</div>
+          <div class="stat-label">入場者数</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" id="totalTickets">0</div>
+          <div class="stat-label">総チケット数</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QRスキャン画面 -->
+  <div class="screen hidden" id="qrScanScreen">
+    <div class="container">
+      <div class="screen-header">
+        <button id="stopQRScan" class="btn-danger btn-small">← 戻る</button>
+        <h2>QRコード読み取り</h2>
+      </div>
+
+      <div id="qrReader"></div>
+      <p id="qrScanStatus" class="scan-status">QRコードをカメラに向けてください</p>
+
+      <div class="scan-controls">
+        <button id="pauseResumeBtn" class="btn-warning">⏸️ 一時停止</button>
+        <button id="continuousModeBtn" class="btn-success">🔄 連続スキャン: ON</button>
+        <button id="switchToManual" class="btn-secondary btn-full">📝 手動入力に切り替え</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 手動入力画面 -->
+  <div class="screen hidden" id="manualEntryScreen">
+    <div class="container">
+      <div class="screen-header">
+        <button id="backToMain" class="btn-danger btn-small">← 戻る</button>
+        <h2>手動検索</h2>
+      </div>
+
+      <div class="card">
+        <h3>🔍 顧客検索</h3>
+        <p style="text-align: center; margin-bottom: 20px; color: #666">
+          チケット番号、名前、メールアドレスで検索できます
+        </p>
+
+        <div class="input-group">
+          <input type="text" id="searchInput" class="search-input" placeholder="チケット番号または名前を入力">
+        </div>
+
+        <button id="searchButton" class="btn-primary btn-large btn-full">🔍 検索</button>
+
+        <div class="test-numbers">
+          <p><strong>テスト用チケット番号:</strong> 634, 183, 631</p>
+        </div>
+      </div>
+
+      <div id="searchResult" class="search-result"></div>
+    </div>
+  </div>
+
+  <!-- 顧客情報画面 -->
+  <div class="screen hidden" id="customerInfoScreen">
+    <div class="container">
+      <div class="screen-header">
+        <button id="backToSearch" class="btn-danger btn-small">← 戻る</button>
+        <h2>👤 顧客情報</h2>
+      </div>
+
+      <div class="customer-info">
+        <div class="info-item">
+          <span class="info-label">チケット番号:</span>
+          <span id="customerTicket" class="info-value">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">お名前:</span>
+          <span id="customerName" class="info-value">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">メールアドレス:</span>
+          <span id="customerEmail" class="info-value">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">購入枚数:</span>
+          <span id="customerTickets" class="info-value">-</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">座席番号:</span>
+          <span id="customerSeat" class="info-value">-</span>
+        </div>
+      </div>
+
+      <div id="entryHistory" class="card hidden">
+        <h3>📝 入場履歴</h3>
+        <div id="entryHistoryList"></div>
+      </div>
+
+      <div class="entry-section">
+        <h3>入場処理</h3>
+        <div class="input-group">
+          <label for="entryCountInput">入場人数:</label>
+          <input type="number" id="entryCountInput" min="1" max="10" value="1">
+        </div>
+        <button id="confirmEntry" class="btn-full">✅ 入場を確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 完了画面 -->
+  <div class="screen hidden" id="completionScreen">
+    <div class="container">
+      <div class="complete-content">
+        <div class="success-icon">✅</div>
+        <h2>入場完了</h2>
+        <div class="completion-details">
+          <p><strong>お名前:</strong> <span id="completedCustomerName">-</span></p>
+          <p><strong>チケット番号:</strong> <span id="completedTicketNumber">-</span></p>
+          <p><strong>入場人数:</strong> <span id="completedTickets">-</span></p>
+          <p><strong>入場時刻:</strong> <span id="entryTime">-</span></p>
+        </div>
+        <button id="nextCustomer" class="btn-full">次の顧客を処理</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- データ管理メニュー画面 -->
+  <div class="screen hidden" id="dataMenuScreen">
+    <div class="container">
+      <div class="screen-header">
+        <button id="backToMainFromMenu" class="btn-danger btn-small">← 戻る</button>
+        <h2>📋 データ管理</h2>
+      </div>
+
+      <div class="menu-grid">
+        <button id="viewCustomersBtn" class="menu-item">
+          <div class="menu-icon">👥</div>
+          <div class="menu-title">顧客データ一覧</div>
+          <div class="menu-desc">全顧客データを表示</div>
+        </button>
+        <button id="viewEntriesBtn" class="menu-item">
+          <div class="menu-icon">📋</div>
+          <div class="menu-title">入場記録一覧</div>
+          <div class="menu-desc">入場履歴を表示</div>
+        </button>
+        <button id="exportDataBtn" class="menu-item">
+          <div class="menu-icon">💾</div>
+          <div class="menu-title">データエクスポート</div>
+          <div class="menu-desc">CSVでダウンロード</div>
+        </button>
+        <button id="clearDataBtn" class="menu-item danger">
+          <div class="menu-icon">🗑️</div>
+          <div class="menu-title">データクリア</div>
+          <div class="menu-desc">入場記録をリセット</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 顧客データ一覧画面 -->
+  <div class="screen hidden" id="customerListScreen">
+    <div class="container">
+      <div class="screen-header">
+        <button id="backToMenuFromCustomers" class="btn-danger btn-small">← 戻る</button>
+        <h2>👥 顧客データ一覧</h2>
+      </div>
+
+      <div class="list-controls">
+        <input type="search" id="customerSearchInput" class="search-input" placeholder="名前、チケット番号、メールで検索...">
+        <select id="customerFilterSelect" class="filter-select">
+          <option value="all">全て表示</option>
+          <option value="entered">入場済み</option>
+          <option value="not-entered">未入場</option>
+        </select>
+      </div>
+
+      <div class="list-stats">
+        <span id="customerListStats">顧客データを読み込み中...</span>
+      </div>
+
+      <div id="customerList" class="data-list"></div>
+    </div>
+  </div>
+
+  <!-- 入場記録一覧画面 -->
+  <div class="screen hidden" id="entryListScreen">
+    <div class="container">
+      <div class="screen-header">
+        <button id="backToMenuFromEntries" class="btn-danger btn-small">← 戻る</button>
+        <h2>📋 入場記録一覧</h2>
+      </div>
+
+      <div class="list-controls">
+        <input type="search" id="entrySearchInput" class="search-input" placeholder="名前、チケット番号で検索...">
+        <input type="date" id="entryDateFilter" class="date-filter">
+      </div>
+
+      <div class="list-stats">
+        <span id="entryListStats">入場記録を読み込み中...</span>
+      </div>
+
+      <div id="entryList" class="data-list"></div>
+    </div>
+  </div>
+
+  <!-- ローディング -->
+  <div class="loading hidden" id="loading">
+    <div class="spinner"></div>
+    <p>処理中...</p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
