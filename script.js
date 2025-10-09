@@ -1,1179 +1,764 @@
-<!DOCTYPE html>
-<html lang="ja" data-theme="light">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>カメラ許可問題解決版 script.js</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css" />
-    <style>
-      body {
-        max-width: 880px;
-        margin: 0 auto;
-        padding: 32px 80px;
-        position: relative;
-        box-sizing: border-box;
-        font-family: 'Times New Roman', serif;
-        line-height: 1.6;
-        color: #333;
-        background: white;
-      }
-
-      h1 {
-        text-align: center;
-        color: #2c3e50;
-        border-bottom: 2px solid #2c3e50;
-        padding-bottom: 16px;
-        margin-bottom: 32px;
-      }
-
-      h2 {
-        color: #34495e;
-        margin-top: 32px;
-        margin-bottom: 16px;
-      }
-
-      .code-section {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        padding: 20px;
-        margin: 20px 0;
-        font-family: 'Courier New', monospace;
-        font-size: 11px;
-        line-height: 1.4;
-      }
-
-      .description {
-        background: #e7f3ff;
-        border-left: 4px solid #2196f3;
-        padding: 15px;
-        margin: 15px 0;
-      }
-
-      .warning {
-        background: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 15px;
-        margin: 15px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>カメラ許可問題解決版 script.js</h1>
-
-    <div class="description">
-      <strong>概要：</strong
-      >この修正版script.jsファイルは、QRコード読み取り後にカメラ許可が消える問題を解決し、既存の全機能を維持しながら、カメラストリーム保持、一時停止・再開、連続スキャンモードを実装します。
-    </div>
-
-    <h2>完全修正版 script.js</h2>
-
-    <div class="code-section">
-      <pre>
-new_string:
-// ========================================
-// 入場管理アプリ - カメラ許可問題解決版 JavaScript
-// QRスキャン後もカメラストリームを維持する改良版
-// ========================================
-
-// === API設定 ===
-const API_CONFIG = {
-    // Google Apps Script Web App URL（あなたのURLに変更してください）
-    BASE_URL: 'https://script.google.com/macros/s/AKfycbzhMroDqsp9_fNtxRoj9Qcl39iY2YXGQdc5HxT0AFbEppDLz2kguHQGgmxB6nig-S-W/exec',
-    
-    TIMEOUT: 10000,
-    MAX_RETRIES: 3
+// 入場管理アプリのメイン設定
+const CONFIG = {
+  GOOGLE_APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzhMroDqsp9_fNtxRoj9Qcl39iY2YXGQdc5HxT0AFbEppDLz2kguHQGgmxB6nig-S-W/exec',
+  STORAGE_KEY: 'entryManagementData',
+  CUSTOMER_STORAGE_KEY: 'customerData',
+  // カメラ設定: 外カメラを優先
+  CAMERA_PREFERENCE: 'environment', // 'user' for front camera, 'environment' for rear camera
+  // データ取得設定: オンライン優先
+  PREFER_ONLINE_DATA: true,
+  // オフライン用サンプルデータ（オンライン取得失敗時のみ使用）
+  FALLBACK_SAMPLE_DATA: false
 };
 
-// === グローバル変数 ===
-let customers = [];
-let processedCustomers = [];
-let currentCustomer = null;
+// グローバル変数
 let html5QrCode = null;
+let customerData = [];
+let entryData = [];
 let isScanning = false;
+let isPaused = false;
+let continuousScanMode = true;
+let cameraInitialized = false;
+let processedCustomers = new Set();
 
-// === NEW: カメラ許可問題解決用の変数 ===
-let scannerPaused = false; // スキャナー一時停止フラグ
-let continuousScanMode = true; // 連続スキャンモード
-let cameraInitialized = false; // カメラ初期化完了フラグ
-let autoReturnToScan = true; // 自動でスキャン画面に戻る機能
-
-// === アプリケーション初期化 ===
+// アプリ初期化
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 入場管理アプリを開始します（カメラ許可問題解決版）');
+  console.log('入場管理アプリが読み込まれました (外カメラ・オンライン優先版)');
+  
+  // 画面要素の取得
+  const mainScreen = document.getElementById('mainScreen');
+  const qrScanScreen = document.getElementById('qrScanScreen');
+  const manualEntryScreen = document.getElementById('manualEntryScreen');
+  const customerInfoScreen = document.getElementById('customerInfoScreen');
+  const completionScreen = document.getElementById('completionScreen');
+  const dataMenuScreen = document.getElementById('dataMenuScreen');
+  const customerListScreen = document.getElementById('customerListScreen');
+  const entryListScreen = document.getElementById('entryListScreen');
+  const loading = document.getElementById('loading');
+  
+  // 初期データ読み込み
+  loadStoredData();
+  updateStats();
+  
+  // 画面切り替え関数
+  function showScreen(screenId) {
+    console.log('画面切り替え:', screenId);
     
-    // 設定の読み込み
-    loadScanSettings();
-    
-    setupEventListeners();
-    loadProcessedCustomers();
-    loadCustomersFromAPI();
-    updateStats();
-    
-    console.log('✅ 初期化完了（カメラ保持機能付き）');
-});
-
-// === NEW: スキャン設定の読み込み ===
-function loadScanSettings() {
-    try {
-        const savedContinuousMode = localStorage.getItem('continuousScanMode');
-        if (savedContinuousMode !== null) {
-            continuousScanMode = JSON.parse(savedContinuousMode);
-        }
-        
-        const savedAutoReturn = localStorage.getItem('autoReturnToScan');
-        if (savedAutoReturn !== null) {
-            autoReturnToScan = JSON.parse(savedAutoReturn);
-        }
-        
-        console.log('⚙️ スキャン設定読み込み:', { continuousScanMode, autoReturnToScan });
-    } catch (error) {
-        console.error('❌ スキャン設定読み込みエラー:', error);
-    }
-}
-
-// === イベントリスナー設定（統合版） ===
-function setupEventListeners() {
-    console.log('🔗 イベントリスナー設定開始...');
-    
-    // メイン画面
-    safeAddEventListener('startQRScan', 'click', showQRScanScreen);
-    safeAddEventListener('manualEntry', 'click', showManualEntryScreen);
-    safeAddEventListener('updateBtn', 'click', loadCustomersFromAPI);
-    
-    // データ管理メニュー
-    safeAddEventListener('menuBtn', 'click', showDataMenuScreen);
-    safeAddEventListener('backToMainFromMenu', 'click', showMainScreen);
-    
-    // QRスキャン画面
-    safeAddEventListener('stopQRScan', 'click', function() {
-        stopQRScanner();
-        showMainScreen();
-    });
-    safeAddEventListener('switchToManual', 'click', function() {
-        stopQRScanner();
-        showManualEntryScreen();
-    });
-    
-    // NEW: QRスキャン画面の新機能
-    safeAddEventListener('pauseResumeBtn', 'click', function() {
-        if (scannerPaused) {
-            resumeQRScanner();
-        } else {
-            pauseQRScanner();
-        }
-        updatePauseResumeButton();
-    });
-    
-    safeAddEventListener('continuousModeBtn', 'click', function() {
-        toggleContinuousMode();
-        updateContinuousModeButton();
-    });
-    
-    // 手動入力画面
-    safeAddEventListener('searchButton', 'click', performSearch);
-    safeAddEventListener('backToMain', 'click', showMainScreen);
-    safeAddEventListener('searchInput', 'keypress', function(e) {
-        if (e.key === 'Enter') performSearch();
-    });
-    
-    // 顧客情報画面
-    safeAddEventListener('confirmEntry', 'click', processEntry);
-    safeAddEventListener('backToSearch', 'click', showMainScreen);
-    
-    // 完了画面
-    safeAddEventListener('nextCustomer', 'click', showMainScreen);
-    
-    // データ管理機能
-    safeAddEventListener('viewCustomersBtn', 'click', showCustomerListScreen);
-    safeAddEventListener('backToMenuFromCustomers', 'click', showDataMenuScreen);
-    safeAddEventListener('customerSearchInput', 'input', filterCustomerList);
-    safeAddEventListener('customerFilterSelect', 'change', filterCustomerList);
-    
-    safeAddEventListener('viewEntriesBtn', 'click', showEntryListScreen);
-    safeAddEventListener('backToMenuFromEntries', 'click', showDataMenuScreen);
-    safeAddEventListener('entrySearchInput', 'input', filterEntryList);
-    safeAddEventListener('entryDateFilter', 'change', filterEntryList);
-    
-    safeAddEventListener('exportDataBtn', 'click', exportData);
-    safeAddEventListener('clearDataBtn', 'click', clearEntryData);
-    
-    console.log('✅ すべてのイベントリスナー設定完了');
-}
-
-function safeAddEventListener(elementId, event, handler) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.addEventListener(event, handler);
-        console.log(`${elementId} にイベントリスナー設定完了`);
-    } else {
-        console.warn(`要素が見つかりません: ${elementId}`);
-    }
-}
-
-// === 改良版: QRスキャナー開始（カメラストリーム保持） ===
-async function startQRScanner() {
-    console.log('📷 QRスキャナー開始（カメラストリーム保持版）');
-    
-    try {
-        // 既に初期化済みで一時停止中の場合は再開
-        if (html5QrCode && cameraInitialized && scannerPaused) {
-            resumeQRScanner();
-            return;
-        }
-        
-        // 新規初期化または再初期化
-        if (!html5QrCode || !cameraInitialized) {
-            html5QrCode = new Html5Qrcode("qrReader");
-            
-            const config = {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0,
-                disableFlip: false,
-                rememberLastUsedCamera: true // カメラ選択を記憶
-            };
-            
-            await html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onQRScanSuccess,
-                onQRScanError
-            );
-            
-            cameraInitialized = true;
-        }
-        
-        isScanning = true;
-        scannerPaused = false;
-        
-        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-        console.log('✅ QRスキャナー開始成功');
-        
-    } catch (error) {
-        console.error('❌ QRスキャナー開始エラー:', error);
-        updateScanStatus('カメラの起動に失敗しました', 'error');
-        cameraInitialized = false;
-        isScanning = false;
-        
-        // カメラエラー時は手動入力を推奨
-        setTimeout(() => {
-            showMessage('カメラが使用できません。手動入力をご利用ください。');
-            showManualEntryScreen();
-        }, 2000);
-    }
-}
-
-// === NEW: QRスキャナー一時停止（カメラ保持） ===
-function pauseQRScanner() {
-    if (!html5QrCode || !isScanning || scannerPaused) {
-        return;
-    }
-    
-    console.log('⏸️ QRスキャナー一時停止（カメラストリーム保持）');
-    scannerPaused = true;
-    
-    updateScanStatus('スキャンを一時停止しました', 'paused');
-    showMessage('スキャンを一時停止しました', 'warning');
-}
-
-// === NEW: QRスキャナー再開 ===
-function resumeQRScanner() {
-    if (!html5QrCode || !cameraInitialized || !scannerPaused) {
-        return;
-    }
-    
-    console.log('▶️ QRスキャナー再開');
-    scannerPaused = false;
-    isScanning = true;
-    
-    updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-    showMessage('スキャンを再開しました', 'success');
-}
-
-// === 改良版: QRスキャナー停止（clear()を使わない） ===
-async function stopQRScanner() {
-    if (!html5QrCode || !isScanning) {
-        return;
-    }
-    
-    try {
-        console.log('⏹️ QRスキャナー停止（カメラストリーム保持）');
-        
-        // カメラストリームは停止するが、clear()は呼ばない
-        await html5QrCode.stop();
-        
-        isScanning = false;
-        scannerPaused = false;
-        // cameraInitializedはtrueのまま保持
-        
-        console.log('✅ QRスキャナー停止完了（再起動高速化）');
-        
-    } catch (error) {
-        console.error('❌ QRスキャナー停止エラー:', error);
-        isScanning = false;
-        scannerPaused = false;
-    }
-}
-
-// === NEW: 完全なリソース解放（アプリ終了時のみ） ===
-function completelyStopScanner() {
-    console.log('🛑 スキャナー完全停止');
-    
-    if (html5QrCode && cameraInitialized) {
-        html5QrCode.stop()
-            .then(() => {
-                // 完全終了時のみclear()を実行
-                html5QrCode.clear();
-                html5QrCode = null;
-                cameraInitialized = false;
-                isScanning = false;
-                scannerPaused = false;
-                console.log('✅ スキャナー完全停止完了');
-            })
-            .catch(error => {
-                console.error('❌ 完全停止エラー:', error);
-            });
-    }
-}
-
-// === 改良版: QRコード読み取り成功時の処理 ===
-function onQRScanSuccess(decodedText) {
-    // 一時停止中は処理しない
-    if (scannerPaused) {
-        return;
-    }
-    
-    console.log('✅ QRコード読み取り成功:', decodedText);
-    playSuccessSound();
-    updateScanStatus('読み取り成功！', 'success');
-    
-    // 顧客情報を検索
-    const customer = findCustomerByQR(decodedText);
-    
-    if (customer) {
-        console.log('👤 顧客発見:', customer.name);
-        
-        // 連続スキャンモードでない場合のみ一時停止
-        if (!continuousScanMode) {
-            pauseQRScanner();
-        }
-        
-        showCustomerInfo(customer);
-        
-    } else {
-        console.log('❌ 顧客が見つかりません');
-        playErrorSound();
-        updateScanStatus('顧客が見つかりません', 'error');
-        showMessage('該当するチケットが見つかりません', 'error');
-        
-        // 連続スキャンモードの場合、継続してスキャン
-        setTimeout(() => {
-            updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-        }, 3000);
-    }
-}
-
-function onQRScanError(errorMessage) {
-    // エラーは頻繁なので無視
-}
-
-// === NEW: 連続スキャンモード切り替え ===
-function toggleContinuousMode() {
-    continuousScanMode = !continuousScanMode;
-    
-    // ローカルストレージに保存
-    localStorage.setItem('continuousScanMode', JSON.stringify(continuousScanMode));
-    
-    const message = `連続スキャンモードを${continuousScanMode ? 'ON' : 'OFF'}にしました`;
-    showMessage(message, 'info');
-    
-    console.log('🔄 連続スキャンモード:', continuousScanMode);
-}
-
-// === NEW: ボタン状態更新 ===
-function updatePauseResumeButton() {
-    const button = document.getElementById('pauseResumeBtn');
-    if (button) {
-        button.textContent = scannerPaused ? '▶️ 再開' : '⏸️ 一時停止';
-    }
-}
-
-function updateContinuousModeButton() {
-    const button = document.getElementById('continuousModeBtn');
-    if (button) {
-        button.textContent = `🔄 連続スキャン: ${continuousScanMode ? 'ON' : 'OFF'}`;
-    }
-}
-
-// === API通信（修正版） ===
-async function loadCustomersFromAPI() {
-    showLoading(true);
-    
-    try {
-        // URLパラメータとして送信（CORS回避）
-        const url = `${API_CONFIG.BASE_URL}?action=getCustomers&origin=${encodeURIComponent(window.location.origin)}&_t=${Date.now()}`;
-        
-        console.log('API URL:', url);
-        
-        const response = await fetch(url, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-cache'
-        });
-        
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const text = await response.text();
-        console.log('Response text:', text);
-        
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError);
-            throw new Error('無効なJSONレスポンス');
-        }
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        if (!data.customers || !Array.isArray(data.customers)) {
-            throw new Error('顧客データが無効な形式です');
-        }
-        
-        customers = data.customers;
-        saveCustomersToLocal();
-        showMessage(`${customers.length}件の顧客データを更新しました`);
-        updateStats();
-        
-        console.log('API取得成功:', customers.length, '件');
-        
-    } catch (error) {
-        console.error('API取得エラー:', error);
-        loadCustomersFromLocal();
-        showMessage('データ更新に失敗しました。オフラインデータを使用します。');
-    } finally {
-        showLoading(false);
-    }
-}
-
-async function recordEntryToAPI(customer, entryCount) {
-    try {
-        const url = `${API_CONFIG.BASE_URL}?action=recordEntry&origin=${encodeURIComponent(window.location.origin)}&ticketNumber=${encodeURIComponent(customer.ticketNumber)}&name=${encodeURIComponent(customer.name)}&entryCount=${entryCount}&deviceId=${encodeURIComponent(getDeviceId())}&_t=${Date.now()}`;
-        
-        console.log('Entry API URL:', url);
-        
-        const response = await fetch(url, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-cache'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const text = await response.text();
-        const data = JSON.parse(text);
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        console.log('入場記録API送信成功');
-        return data;
-        
-    } catch (error) {
-        console.error('入場記録API送信エラー:', error);
-        // エラーでもローカルには記録済みなので、処理は継続
-    }
-}
-
-// === ローカルストレージ ===
-function saveCustomersToLocal() {
-    try {
-        localStorage.setItem('customers', JSON.stringify(customers));
-    } catch (error) {
-        console.error('データ保存エラー:', error);
-    }
-}
-
-function loadCustomersFromLocal() {
-    try {
-        const saved = localStorage.getItem('customers');
-        if (saved) {
-            customers = JSON.parse(saved);
-            console.log(`${customers.length}件のローカルデータを読み込み`);
-        } else {
-            customers = getSampleData();
-            console.log('サンプルデータを使用');
-        }
-    } catch (error) {
-        console.error('データ読み込みエラー:', error);
-        customers = getSampleData();
-    }
-}
-
-function getSampleData() {
-    return [
-        {
-            ticketNumber: '634',
-            name: '小倉 文',
-            email: 'ogura@example.com',
-            tickets: 2,
-            seatNumber: 'A1-A2',
-            qrCode: 'TICKET634'
-        },
-        {
-            ticketNumber: '183',
-            name: '渡瀬 美有',
-            email: 'watase@example.com',
-            tickets: 2,
-            seatNumber: 'B3-B4',
-            qrCode: 'TICKET183'
-        },
-        {
-            ticketNumber: '631',
-            name: '親一郎 川本',
-            email: 'kawamoto@example.com',
-            tickets: 7,
-            seatNumber: 'C1-C7',
-            qrCode: 'TICKET631'
-        }
-    ];
-}
-
-function saveProcessedCustomers() {
-    try {
-        localStorage.setItem('processedCustomers', JSON.stringify(processedCustomers));
-    } catch (error) {
-        console.error('データ保存エラー:', error);
-    }
-}
-
-function loadProcessedCustomers() {
-    try {
-        const saved = localStorage.getItem('processedCustomers');
-        if (saved) {
-            processedCustomers = JSON.parse(saved);
-            console.log(`${processedCustomers.length}件の入場済みデータを読み込み`);
-        }
-    } catch (error) {
-        console.error('データ読み込みエラー:', error);
-        processedCustomers = [];
-    }
-}
-
-// === 画面制御 ===
-function showMainScreen() {
-    console.log('メイン画面表示');
-    hideAllScreens();
-    const mainScreen = document.getElementById('mainScreen');
-    if (mainScreen) {
-        mainScreen.classList.remove('hidden');
-    }
-    updateStats();
-}
-
-function showQRScanScreen() {
-    console.log('QRスキャン画面表示');
-    hideAllScreens();
-    const qrScreen = document.getElementById('qrScanScreen');
-    if (qrScreen) {
-        qrScreen.classList.remove('hidden');
-    }
-    
-    // ボタンの状態を更新
-    updatePauseResumeButton();
-    updateContinuousModeButton();
-    
-    // スキャナーを開始（カメラ初期化済みの場合は再開）
-    setTimeout(() => {
-        if (html5QrCode && cameraInitialized) {
-            resumeQRScanner();
-        } else {
-            startQRScanner();
-        }
-    }, 500);
-}
-
-function showManualEntryScreen() {
-    console.log('手動入力画面表示');
-    hideAllScreens();
-    const manualScreen = document.getElementById('manualEntryScreen');
-    if (manualScreen) {
-        manualScreen.classList.remove('hidden');
-    }
-    
-    const searchInput = document.getElementById('searchInput');
-    const searchResult = document.getElementById('searchResult');
-    
-    if (searchInput) {
-        searchInput.value = '';
-        searchInput.focus();
-    }
-    
-    if (searchResult) {
-        searchResult.innerHTML = '';
-    }
-}
-
-function showDataMenuScreen() {
-    console.log('データ管理メニュー画面表示');
-    hideAllScreens();
-    const menuScreen = document.getElementById('dataMenuScreen');
-    if (menuScreen) {
-        menuScreen.classList.remove('hidden');
-    }
-}
-
-function showCustomerListScreen() {
-    console.log('顧客データ一覧画面表示');
-    hideAllScreens();
-    const customerListScreen = document.getElementById('customerListScreen');
-    if (customerListScreen) {
-        customerListScreen.classList.remove('hidden');
-    }
-    displayCustomerList();
-}
-
-function showEntryListScreen() {
-    console.log('入場記録一覧画面表示');
-    hideAllScreens();
-    const entryListScreen = document.getElementById('entryListScreen');
-    if (entryListScreen) {
-        entryListScreen.classList.remove('hidden');
-    }
-    displayEntryList();
-}
-
-function hideAllScreens() {
-    const screens = document.querySelectorAll('.screen');
+    // 全ての画面を非表示
+    const screens = [mainScreen, qrScanScreen, manualEntryScreen, customerInfoScreen, 
+                    completionScreen, dataMenuScreen, customerListScreen, entryListScreen];
     screens.forEach(screen => {
-        screen.classList.add('hidden');
+      if (screen) screen.classList.add('hidden');
     });
-}
-
-// === 検索・顧客情報表示 ===
-function findCustomerByQR(qrText) {
-    return customers.find(c => 
-        c.qrCode === qrText || 
-        c.ticketNumber.toString() === qrText ||
-        qrText.includes(c.ticketNumber.toString())
-    );
-}
-
-function updateScanStatus(message, status) {
+    
+    // 指定された画面を表示
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+      targetScreen.classList.remove('hidden');
+    }
+  }
+  
+  // ローディング表示/非表示
+  function showLoading() {
+    loading.classList.remove('hidden');
+  }
+  
+  function hideLoading() {
+    loading.classList.add('hidden');
+  }
+  
+  // Google Sheets からデータを取得（オンライン優先）
+  async function fetchCustomerData() {
+    if (!CONFIG.PREFER_ONLINE_DATA) {
+      console.log('オフラインモード設定のため、スキップ');
+      return false;
+    }
+    
+    try {
+      showLoading();
+      console.log('Google Sheetsからオンラインデータを取得中...');
+      
+      const response = await fetch(CONFIG.GOOGLE_APPS_SCRIPT_URL + '?action=getCustomers', {
+        method: 'GET',
+        cache: 'no-cache'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.customers && data.customers.length > 0) {
+        customerData = data.customers;
+        localStorage.setItem(CONFIG.CUSTOMER_STORAGE_KEY, JSON.stringify(customerData));
+        console.log(`✅ ${customerData.length}件の顧客データをオンライン取得しました`);
+        updateStats();
+        return true;
+      } else {
+        throw new Error('有効な顧客データが見つかりませんでした');
+      }
+    } catch (error) {
+      console.error('オンラインデータ取得エラー:', error);
+      
+      if (CONFIG.FALLBACK_SAMPLE_DATA) {
+        // サンプルデータを使用（設定で有効な場合のみ）
+        customerData = [
+          {
+            ticketNumber: '634',
+            name: 'テスト 太郎',
+            email: 'test1@example.com',
+            ticketCount: 2,
+            seatNumber: 'A-12'
+          },
+          {
+            ticketNumber: '183',
+            name: 'サンプル 花子',
+            email: 'test2@example.com',
+            ticketCount: 1,
+            seatNumber: 'B-05'
+          },
+          {
+            ticketNumber: '631',
+            name: 'デモ 次郎',
+            email: 'test3@example.com',
+            ticketCount: 3,
+            seatNumber: 'C-08'
+          }
+        ];
+        localStorage.setItem(CONFIG.CUSTOMER_STORAGE_KEY, JSON.stringify(customerData));
+        alert('⚠️ オンラインデータ取得に失敗しました\nサンプルデータを使用します');
+        updateStats();
+        return false;
+      } else {
+        alert('❌ オンラインデータの取得に失敗しました\n' +
+              'インターネット接続とGoogle Apps Scriptの設定を確認してください\n\n' +
+              'エラー: ' + error.message);
+        return false;
+      }
+    } finally {
+      hideLoading();
+    }
+  }
+  
+  // ローカルストレージからデータ読み込み
+  function loadStoredData() {
+    const storedCustomers = localStorage.getItem(CONFIG.CUSTOMER_STORAGE_KEY);
+    const storedEntries = localStorage.getItem(CONFIG.STORAGE_KEY);
+    
+    if (storedCustomers) {
+      customerData = JSON.parse(storedCustomers);
+      console.log(`📁 保存済み顧客データ: ${customerData.length}件`);
+    }
+    
+    if (storedEntries) {
+      entryData = JSON.parse(storedEntries);
+      // Set processed customers
+      entryData.forEach(entry => {
+        processedCustomers.add(entry.ticketNumber);
+      });
+      console.log(`📁 保存済み入場記録: ${entryData.length}件`);
+    }
+  }
+  
+  // 統計情報更新
+  function updateStats() {
+    const entryCountElement = document.getElementById('entryCount');
+    const totalTicketsElement = document.getElementById('totalTickets');
+    
+    const totalEntries = entryData.reduce((sum, entry) => sum + (entry.entryCount || 1), 0);
+    const totalTickets = customerData.reduce((sum, customer) => sum + (customer.ticketCount || 1), 0);
+    
+    if (entryCountElement) entryCountElement.textContent = totalEntries;
+    if (totalTicketsElement) totalTicketsElement.textContent = totalTickets;
+  }
+  
+  // QRコード読み取り開始（外カメラ優先）
+  function startQRScanner() {
+    console.log('QRスキャナー開始 (外カメラ優先)');
+    
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("qrReader");
+    }
+    
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0,
+      // 外カメラを優先する設定
+      facingMode: CONFIG.CAMERA_PREFERENCE
+    };
+    
+    Html5Qrcode.getCameras().then(cameras => {
+      if (cameras && cameras.length) {
+        console.log(`利用可能なカメラ: ${cameras.length}台`);
+        
+        // 外カメラを優先して選択
+        let selectedCamera = cameras[0]; // デフォルト
+        
+        // 外カメラを探す
+        const rearCamera = cameras.find(camera => 
+          camera.label && (
+            camera.label.toLowerCase().includes('back') ||
+            camera.label.toLowerCase().includes('rear') ||
+            camera.label.toLowerCase().includes('environment')
+          )
+        );
+        
+        if (rearCamera && CONFIG.CAMERA_PREFERENCE === 'environment') {
+          selectedCamera = rearCamera;
+          console.log('🎥 外カメラを選択:', selectedCamera.label);
+        } else {
+          console.log('🎥 カメラを選択:', selectedCamera.label);
+        }
+        
+        html5QrCode.start(selectedCamera.id, config, onScanSuccess, onScanFailure)
+          .then(() => {
+            console.log('✅ QRスキャナー開始成功');
+            isScanning = true;
+            cameraInitialized = true;
+            updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+          })
+          .catch(err => {
+            console.error('❌ QRスキャナー開始エラー:', err);
+            updateScanStatus('カメラの起動に失敗しました', 'error');
+            
+            // 詳細なエラーメッセージ
+            let errorMessage = 'カメラへのアクセス許可が必要です。\n';
+            if (err.name === 'NotAllowedError') {
+              errorMessage += '• ブラウザでカメラ許可を「許可」に設定してください\n';
+              errorMessage += '• プライベートモードの場合は通常モードをお試しください';
+            } else if (err.name === 'NotFoundError') {
+              errorMessage += '• カメラが見つかりません\n• デバイスにカメラが接続されているか確認してください';
+            } else {
+              errorMessage += '• ブラウザの設定を確認してください\n• ページを再読み込みしてお試しください';
+            }
+            
+            alert(errorMessage);
+          });
+      } else {
+        alert('❌ 利用可能なカメラが見つかりませんでした');
+      }
+    }).catch(err => {
+      console.error('❌ カメラ取得エラー:', err);
+      alert('❌ カメラへのアクセスに失敗しました\nデバイスとブラウザの設定を確認してください');
+    });
+  }
+  
+  // QRスキャン成功時の処理
+  function onScanSuccess(decodedText, decodedResult) {
+    console.log('✅ QRコード読み取り成功:', decodedText);
+    
+    if (isPaused) return;
+    
+    updateScanStatus('QRコードを読み取りました', 'success');
+    
+    // 顧客検索
+    const customer = findCustomer(decodedText);
+    if (customer) {
+      displayCustomerInfo(customer);
+      showScreen('customerInfoScreen');
+      
+      if (!continuousScanMode) {
+        pauseQRScanner();
+      }
+    } else {
+      updateScanStatus('該当する顧客が見つかりませんでした', 'error');
+      setTimeout(() => {
+        if (isScanning && !isPaused) {
+          updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+        }
+      }, 2000);
+    }
+  }
+  
+  // QRスキャン失敗時の処理
+  function onScanFailure(error) {
+    // エラーメッセージは表示しない（通常の動作）
+  }
+  
+  // スキャンステータス更新
+  function updateScanStatus(message, type = '') {
     const statusElement = document.getElementById('qrScanStatus');
     if (statusElement) {
-        statusElement.textContent = message;
-        statusElement.className = `scan-status ${status}`;
+      statusElement.textContent = message;
+      statusElement.className = 'scan-status ' + type;
     }
-}
-
-function performSearch() {
-    console.log('検索実行');
-    const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
-    
-    const query = searchInput.value.trim();
-    
-    if (!query) {
-        showMessage('検索キーワードを入力してください');
-        return;
+  }
+  
+  // QRスキャナー一時停止（カメラストリーム保持）
+  function pauseQRScanner() {
+    if (html5QrCode && isScanning && !isPaused) {
+      html5QrCode.pause();
+      isPaused = true;
+      updateScanStatus('スキャンを一時停止しました', 'paused');
+      console.log('⏸️ QRスキャナー一時停止（カメラストリーム保持）');
     }
-    
-    const results = customers.filter(customer => 
-        customer.name.includes(query) ||
-        customer.email.includes(query) ||
-        customer.ticketNumber.toString().includes(query)
+  }
+  
+  // QRスキャナー再開
+  function resumeQRScanner() {
+    if (html5QrCode && isScanning && isPaused) {
+      html5QrCode.resume();
+      isPaused = false;
+      updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      console.log('▶️ QRスキャナー再開');
+    }
+  }
+  
+  // QRスキャナー停止
+  function stopQRScanner() {
+    if (html5QrCode && isScanning) {
+      html5QrCode.stop().then(() => {
+        console.log('⏹️ QRスキャナー停止');
+        isScanning = false;
+        isPaused = false;
+        cameraInitialized = false;
+      }).catch(err => {
+        console.error('QRスキャナー停止エラー:', err);
+      });
+    }
+  }
+  
+  // 顧客検索
+  function findCustomer(query) {
+    return customerData.find(customer => 
+      customer.ticketNumber === query || 
+      customer.name.includes(query) || 
+      customer.email.includes(query)
     );
+  }
+  
+  // 顧客情報表示
+  function displayCustomerInfo(customer) {
+    document.getElementById('customerTicket').textContent = customer.ticketNumber || '-';
+    document.getElementById('customerName').textContent = customer.name || '-';
+    document.getElementById('customerEmail').textContent = customer.email || '-';
+    document.getElementById('customerTickets').textContent = customer.ticketCount || '-';
+    document.getElementById('customerSeat').textContent = customer.seatNumber || '-';
     
-    displaySearchResults(results);
-}
-
-function displaySearchResults(results) {
-    const resultDiv = document.getElementById('searchResult');
-    if (!resultDiv) return;
+    // 入場履歴表示
+    const entryHistory = entryData.filter(entry => entry.ticketNumber === customer.ticketNumber);
+    const historyElement = document.getElementById('entryHistory');
+    const historyListElement = document.getElementById('entryHistoryList');
     
-    if (results.length === 0) {
-        resultDiv.innerHTML = '<p class="no-results">該当する顧客が見つかりませんでした</p>';
-        return;
+    if (entryHistory.length > 0) {
+      historyElement.classList.remove('hidden');
+      historyListElement.innerHTML = entryHistory.map(entry =>
+        `<p><strong>${new Date(entry.entryTime).toLocaleString('ja-JP')}</strong> - ${entry.entryCount}名</p>`
+      ).join('');
+    } else {
+      historyElement.classList.add('hidden');
     }
-    
-    resultDiv.innerHTML = results.map((customer, index) => `
-        <div class="customer-result" onclick="selectCustomer('${customer.ticketNumber}')">
-            <div class="customer-name">${customer.name}</div>
-            <div class="customer-details">
-                チケット番号: ${customer.ticketNumber} | 
-                購入枚数: ${customer.tickets}枚
-                ${customer.seatNumber ? ` | 座席: ${customer.seatNumber}` : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
-function selectCustomer(ticketNumber) {
-    const customer = customers.find(c => c.ticketNumber.toString() === ticketNumber);
-    if (customer) {
-        showCustomerInfo(customer);
-    }
-}
-
-function showCustomerInfo(customer) {
-    console.log('顧客情報表示:', customer.name);
-    hideAllScreens();
-    
-    const customerScreen = document.getElementById('customerInfoScreen');
-    if (!customerScreen) return;
-    
-    customerScreen.classList.remove('hidden');
-    currentCustomer = customer;
-    
-    // 情報表示
-    safeSetTextContent('customerName', customer.name);
-    safeSetTextContent('customerTicket', customer.ticketNumber);
-    safeSetTextContent('customerEmail', customer.email);
-    safeSetTextContent('customerTickets', `${customer.tickets}枚`);
-    safeSetTextContent('customerSeat', customer.seatNumber || '指定なし');
-    
-    // 入場人数の初期値設定
-    const entryCountInput = document.getElementById('entryCountInput');
-    if (entryCountInput) {
-        entryCountInput.value = customer.tickets || 1;
-        entryCountInput.max = customer.tickets || 10;
-    }
-    
-    // 入場履歴を表示
-    displayCustomerEntryHistory(customer);
-}
-
-function safeSetTextContent(elementId, text) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.textContent = text;
-    }
-}
-
-// === 入場処理 ===
-function processEntry() {
-    if (!currentCustomer) {
-        showMessage('顧客が選択されていません');
-        return;
-    }
-    
-    const entryCountInput = document.getElementById('entryCountInput');
-    const entryCount = entryCountInput ? parseInt(entryCountInput.value) : 1;
-    
-    if (entryCount < 1 || entryCount > (currentCustomer.tickets || 10)) {
-        showMessage('入場人数が正しくありません');
-        return;
-    }
-    
-    console.log('入場処理:', currentCustomer.name);
-    
-    const processedCustomer = {
-        ...currentCustomer,
-        entryTime: new Date().toLocaleString('ja-JP'),
-        entryCount: entryCount
+  }
+  
+  // 入場記録保存（オンライン優先）
+  async function saveEntry(customer, entryCount) {
+    const entry = {
+      ticketNumber: customer.ticketNumber,
+      customerName: customer.name,
+      entryCount: parseInt(entryCount),
+      entryTime: new Date().toISOString(),
+      timestamp: Date.now()
     };
     
-    processedCustomers.push(processedCustomer);
-    saveProcessedCustomers();
-    
-    // APIに送信（失敗してもローカルには記録済み）
-    recordEntryToAPI(currentCustomer, entryCount);
-    
-    playSuccessSound();
-    showCompletionScreen(processedCustomer);
-}
-
-// === 改良版: 入場完了後の処理 ===
-function showCompletionScreen(customer) {
-    console.log('🎉 入場完了画面表示');
-    
-    hideAllScreens();
-    
-    const completionScreen = document.getElementById('completionScreen');
-    if (!completionScreen) return;
-    
-    completionScreen.classList.remove('hidden');
-    
-    safeSetTextContent('completedCustomerName', customer.name);
-    safeSetTextContent('completedTicketNumber', customer.ticketNumber);
-    safeSetTextContent('completedTickets', `${customer.entryCount}名`);
-    safeSetTextContent('entryTime', customer.entryTime);
-    
+    // ローカル保存（即座に実行）
+    entryData.push(entry);
+    processedCustomers.add(customer.ticketNumber);
+    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(entryData));
     updateStats();
     
-    // 連続スキャンモードと自動復帰設定に応じて処理
-    const autoReturnTime = continuousScanMode ? 1500 : 3000;
-    
-    setTimeout(() => {
-        if (continuousScanMode && autoReturnToScan && html5QrCode && cameraInitialized) {
-            // 連続モードの場合、スキャン画面に戻る
-            showQRScanScreen();
+    // Google Sheetsに送信（オンライン優先）
+    if (CONFIG.PREFER_ONLINE_DATA) {
+      try {
+        console.log('📤 Google Sheetsに入場記録を送信中...');
+        
+        const response = await fetch(CONFIG.GOOGLE_APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            action: 'addEntry',
+            ticketNumber: entry.ticketNumber,
+            customerName: entry.customerName,
+            entryCount: entry.entryCount,
+            entryTime: entry.entryTime,
+            timestamp: entry.timestamp
+          })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          console.log('✅ 入場記録をGoogle Sheetsに保存しました');
         } else {
-            showMainScreen();
+          console.warn('⚠️ Google Sheets保存で警告:', result.error);
         }
-    }, autoReturnTime);
-}
-
-// === 統計更新 ===
-function updateStats() {
-    const totalProcessed = processedCustomers.length;
-    const totalTickets = processedCustomers.reduce((sum, customer) => sum + (customer.entryCount || customer.tickets || 1), 0);
-    
-    const statsElement = document.getElementById('stats');
-    if (statsElement) {
-        statsElement.innerHTML = `
-            <div class="stat-item">
-                <div class="stat-number">${totalProcessed}</div>
-                <div class="stat-label">入場者数</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-number">${totalTickets}</div>
-                <div class="stat-label">総チケット数</div>
-            </div>
-        `;
+      } catch (error) {
+        console.error('❌ Google Sheets保存エラー:', error);
+        // エラーが発生してもローカル保存は完了しているので処理続行
+      }
     }
-}
-
-// === データ管理機能（簡略版） ===
-function displayCustomerList() {
-    const listElement = document.getElementById('customerList');
-    const statsElement = document.getElementById('customerListStats');
     
-    if (!listElement || !statsElement) return;
+    return entry;
+  }
+  
+  // イベントリスナー設定
+  setupEventListeners();
+  
+  function setupEventListeners() {
+    // メイン画面のボタン
+    const startQRScanBtn = document.getElementById('startQRScan');
+    if (startQRScanBtn) {
+      startQRScanBtn.addEventListener('click', function() {
+        console.log('📷 QRスキャン開始');
+        showScreen('qrScanScreen');
+        startQRScanner();
+      });
+    }
     
-    // 統計更新
-    const totalCustomers = customers.length;
-    const enteredCustomers = customers.filter(customer => 
-        processedCustomers.some(p => p.ticketNumber === customer.ticketNumber)
+    const manualEntryBtn = document.getElementById('manualEntry');
+    if (manualEntryBtn) {
+      manualEntryBtn.addEventListener('click', function() {
+        showScreen('manualEntryScreen');
+      });
+    }
+    
+    const updateBtn = document.getElementById('updateBtn');
+    if (updateBtn) {
+      updateBtn.addEventListener('click', async function() {
+        const success = await fetchCustomerData();
+        if (success) {
+          alert('✅ オンラインデータを更新しました');
+        } else {
+          alert('❌ データ更新に失敗しました');
+        }
+      });
+    }
+    
+    const menuBtn = document.getElementById('menuBtn');
+    if (menuBtn) {
+      menuBtn.addEventListener('click', function() {
+        showScreen('dataMenuScreen');
+      });
+    }
+    
+    // QRスキャン画面のボタン
+    const stopQRScanBtn = document.getElementById('stopQRScan');
+    if (stopQRScanBtn) {
+      stopQRScanBtn.addEventListener('click', function() {
+        stopQRScanner();
+        showScreen('mainScreen');
+      });
+    }
+    
+    const pauseResumeBtn = document.getElementById('pauseResumeBtn');
+    if (pauseResumeBtn) {
+      pauseResumeBtn.addEventListener('click', function() {
+        if (isPaused) {
+          resumeQRScanner();
+          pauseResumeBtn.innerHTML = '⏸️ 一時停止';
+        } else {
+          pauseQRScanner();
+          pauseResumeBtn.innerHTML = '▶️ 再開';
+        }
+      });
+    }
+    
+    const continuousModeBtn = document.getElementById('continuousModeBtn');
+    if (continuousModeBtn) {
+      continuousModeBtn.addEventListener('click', function() {
+        continuousScanMode = !continuousScanMode;
+        if (continuousScanMode) {
+          continuousModeBtn.innerHTML = '🔄 連続スキャン: ON';
+        } else {
+          continuousModeBtn.innerHTML = '🔄 連続スキャン: OFF';
+        }
+      });
+    }
+    
+    const switchToManualBtn = document.getElementById('switchToManual');
+    if (switchToManualBtn) {
+      switchToManualBtn.addEventListener('click', function() {
+        stopQRScanner();
+        showScreen('manualEntryScreen');
+      });
+    }
+    
+    // 手動入力画面のボタン
+    const backToMainBtn = document.getElementById('backToMain');
+    if (backToMainBtn) {
+      backToMainBtn.addEventListener('click', function() {
+        showScreen('mainScreen');
+      });
+    }
+    
+    const searchButton = document.getElementById('searchButton');
+    if (searchButton) {
+      searchButton.addEventListener('click', function() {
+        const searchInput = document.getElementById('searchInput');
+        const query = searchInput ? searchInput.value.trim() : '';
+        
+        if (!query) {
+          alert('🔍 検索キーワードを入力してください');
+          return;
+        }
+        
+        const customer = findCustomer(query);
+        if (customer) {
+          displayCustomerInfo(customer);
+          showScreen('customerInfoScreen');
+        } else {
+          alert('❌ 該当する顧客が見つかりませんでした\n\n' +
+                '• チケット番号、名前、メールアドレスで検索できます\n' +
+                '• 最新データを取得するには「データ更新」ボタンを押してください');
+        }
+      });
+    }
+    
+    // 顧客情報画面のボタン
+    const backToSearchBtn = document.getElementById('backToSearch');
+    if (backToSearchBtn) {
+      backToSearchBtn.addEventListener('click', function() {
+        showScreen('manualEntryScreen');
+      });
+    }
+    
+    const confirmEntryBtn = document.getElementById('confirmEntry');
+    if (confirmEntryBtn) {
+      confirmEntryBtn.addEventListener('click', async function() {
+        const entryCount = parseInt(document.getElementById('entryCountInput').value);
+        const customerTicket = document.getElementById('customerTicket').textContent;
+        const customerName = document.getElementById('customerName').textContent;
+        
+        if (!customerTicket || customerTicket === '-') {
+          alert('❌ 顧客情報が取得できませんでした');
+          return;
+        }
+        
+        const customer = {
+          ticketNumber: customerTicket,
+          name: customerName
+        };
+        
+        try {
+          showLoading();
+          const entry = await saveEntry(customer, entryCount);
+          
+          // 完了画面に遷移
+          document.getElementById('completedCustomerName').textContent = customerName;
+          document.getElementById('completedTicketNumber').textContent = customerTicket;
+          document.getElementById('completedTickets').textContent = entryCount;
+          document.getElementById('entryTime').textContent = new Date().toLocaleString('ja-JP');
+          
+          showScreen('completionScreen');
+        } catch (error) {
+          console.error('入場処理エラー:', error);
+          alert('❌ 入場処理中にエラーが発生しました');
+        } finally {
+          hideLoading();
+        }
+      });
+    }
+    
+    // 完了画面のボタン
+    const nextCustomerBtn = document.getElementById('nextCustomer');
+    if (nextCustomerBtn) {
+      nextCustomerBtn.addEventListener('click', function() {
+        if (continuousScanMode && cameraInitialized) {
+          showScreen('qrScanScreen');
+          resumeQRScanner();
+        } else {
+          showScreen('mainScreen');
+        }
+      });
+    }
+    
+    // データ管理メニューのボタン
+    const backToMainFromMenuBtn = document.getElementById('backToMainFromMenu');
+    if (backToMainFromMenuBtn) {
+      backToMainFromMenuBtn.addEventListener('click', function() {
+        showScreen('mainScreen');
+      });
+    }
+    
+    const viewCustomersBtn = document.getElementById('viewCustomersBtn');
+    if (viewCustomersBtn) {
+      viewCustomersBtn.addEventListener('click', function() {
+        displayCustomerList();
+        showScreen('customerListScreen');
+      });
+    }
+    
+    const viewEntriesBtn = document.getElementById('viewEntriesBtn');
+    if (viewEntriesBtn) {
+      viewEntriesBtn.addEventListener('click', function() {
+        displayEntryList();
+        showScreen('entryListScreen');
+      });
+    }
+    
+    const exportDataBtn = document.getElementById('exportDataBtn');
+    if (exportDataBtn) {
+      exportDataBtn.addEventListener('click', function() {
+        exportToCSV();
+      });
+    }
+    
+    const clearDataBtn = document.getElementById('clearDataBtn');
+    if (clearDataBtn) {
+      clearDataBtn.addEventListener('click', function() {
+        if (confirm('⚠️ 入場記録を全て削除しますか？\nこの操作は取り消せません。')) {
+          entryData = [];
+          processedCustomers.clear();
+          localStorage.removeItem(CONFIG.STORAGE_KEY);
+          updateStats();
+          alert('✅ 入場記録をクリアしました');
+        }
+      });
+    }
+    
+    // 顧客一覧画面のボタン
+    const backToMenuFromCustomersBtn = document.getElementById('backToMenuFromCustomers');
+    if (backToMenuFromCustomersBtn) {
+      backToMenuFromCustomersBtn.addEventListener('click', function() {
+        showScreen('dataMenuScreen');
+      });
+    }
+    
+    // 入場記録一覧画面のボタン
+    const backToMenuFromEntriesBtn = document.getElementById('backToMenuFromEntries');
+    if (backToMenuFromEntriesBtn) {
+      backToMenuFromEntriesBtn.addEventListener('click', function() {
+        showScreen('dataMenuScreen');
+      });
+    }
+    
+    // ボタンにクリック時の視覚的フィードバックを追加
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach((button) => {
+      button.addEventListener('click', function() {
+        button.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          button.style.transform = '';
+        }, 150);
+      });
+    });
+  }
+  
+  // 顧客一覧表示
+  function displayCustomerList() {
+    const customerList = document.getElementById('customerList');
+    const customerListStats = document.getElementById('customerListStats');
+    
+    if (!customerList || !customerListStats) return;
+    
+    const enteredCount = customerData.filter(customer => 
+      processedCustomers.has(customer.ticketNumber)
     ).length;
     
-    statsElement.textContent = `全${totalCustomers}名 (入場済み: ${enteredCustomers}名, 未入場: ${totalCustomers - enteredCustomers}名)`;
+    customerListStats.textContent = `全${customerData.length}件中 ${enteredCount}件入場済み`;
     
-    // リスト表示
-    if (customers.length === 0) {
-        listElement.innerHTML = '<p class="no-data">顧客データがありません</p>';
-        return;
+    if (customerData.length === 0) {
+      customerList.innerHTML = '<div class="no-data">📋 顧客データがありません<br>「データ更新」ボタンで最新データを取得してください</div>';
+      return;
     }
     
-    const customersToShow = getFilteredCustomers();
-    
-    listElement.innerHTML = customersToShow.map(customer => {
-        const hasEntered = processedCustomers.some(p => p.ticketNumber === customer.ticketNumber);
-        const entryCount = processedCustomers.filter(p => p.ticketNumber === customer.ticketNumber).length;
-        
-        return `
-            <div class="list-item ${hasEntered ? 'entered' : 'not-entered'}" onclick="showCustomerDetailFromList('${customer.ticketNumber}')">
-                <div class="list-item-header">
-                    <span class="customer-name">${customer.name}</span>
-                    <span class="entry-status ${hasEntered ? 'entered' : 'pending'}">
-                        ${hasEntered ? `✅ 入場済み (${entryCount}回)` : '⏳ 未入場'}
-                    </span>
-                </div>
-                <div class="list-item-details">
-                    <span>チケット: ${customer.ticketNumber}</span>
-                    <span>枚数: ${customer.tickets}枚</span>
-                    <span>座席: ${customer.seatNumber || '未指定'}</span>
-                </div>
-                <div class="list-item-email">${customer.email}</div>
-            </div>
-        `;
-    }).join('');
-}
-
-function displayEntryList() {
-    const listElement = document.getElementById('entryList');
-    const statsElement = document.getElementById('entryListStats');
-    
-    if (!listElement || !statsElement) return;
-    
-    // 統計更新
-    const totalEntries = processedCustomers.length;
-    const totalTickets = processedCustomers.reduce((sum, customer) => 
-        sum + (customer.entryCount || customer.tickets || 1), 0);
-    
-    statsElement.textContent = `全${totalEntries}件の入場記録 (総チケット数: ${totalTickets}枚)`;
-    
-    // リスト表示
-    if (processedCustomers.length === 0) {
-        listElement.innerHTML = '<p class="no-data">入場記録がありません</p>';
-        return;
-    }
-    
-    const entriesToShow = getFilteredEntries();
-    
-    listElement.innerHTML = entriesToShow.map((entry, index) => `
-        <div class="list-item entry-item">
-            <div class="list-item-header">
-                <span class="customer-name">${entry.name}</span>
-                <span class="entry-time">${entry.entryTime}</span>
-            </div>
-            <div class="list-item-details">
-                <span>チケット: ${entry.ticketNumber}</span>
-                <span>入場人数: ${entry.entryCount || entry.tickets || 1}名</span>
-                <span>座席: ${entry.seatNumber || '未指定'}</span>
-            </div>
-            <div class="list-item-email">${entry.email}</div>
+    customerList.innerHTML = customerData.map(customer => {
+      const isEntered = processedCustomers.has(customer.ticketNumber);
+      return `
+        <div class="list-item">
+          <div class="list-item-header">
+            <span class="customer-name">${customer.name}</span>
+            <span class="entry-status ${isEntered ? 'entered' : 'pending'}">
+              ${isEntered ? '✅ 入場済み' : '⏳ 未入場'}
+            </span>
+          </div>
+          <div class="list-item-details">
+            チケット番号: ${customer.ticketNumber}<br>
+            メール: ${customer.email}<br>
+            購入枚数: ${customer.ticketCount}枚 | 座席: ${customer.seatNumber}
+          </div>
         </div>
+      `;
+    }).join('');
+  }
+  
+  // 入場記録一覧表示
+  function displayEntryList() {
+    const entryList = document.getElementById('entryList');
+    const entryListStats = document.getElementById('entryListStats');
+    
+    if (!entryList || !entryListStats) return;
+    
+    const totalEntries = entryData.reduce((sum, entry) => sum + (entry.entryCount || 1), 0);
+    entryListStats.textContent = `全${entryData.length}件の記録 (入場者数: ${totalEntries}名)`;
+    
+    if (entryData.length === 0) {
+      entryList.innerHTML = '<div class="no-data">📋 入場記録がありません</div>';
+      return;
+    }
+    
+    const sortedEntries = [...entryData].reverse(); // 最新順
+    
+    entryList.innerHTML = sortedEntries.map(entry => `
+      <div class="list-item">
+        <div class="list-item-header">
+          <span class="customer-name">${entry.customerName}</span>
+          <span class="entry-status entered">${entry.entryCount}名</span>
+        </div>
+        <div class="list-item-details">
+          チケット番号: ${entry.ticketNumber}<br>
+          入場時刻: ${new Date(entry.entryTime).toLocaleString('ja-JP')}
+        </div>
+      </div>
     `).join('');
-}
-
-function getFilteredCustomers() {
-    const searchTerm = document.getElementById('customerSearchInput')?.value.toLowerCase() || '';
-    const filter = document.getElementById('customerFilterSelect')?.value || 'all';
-    
-    let filtered = customers.filter(customer => {
-        const matchesSearch = 
-            customer.name.toLowerCase().includes(searchTerm) ||
-            customer.email.toLowerCase().includes(searchTerm) ||
-            customer.ticketNumber.toString().includes(searchTerm);
-        
-        if (!matchesSearch) return false;
-        
-        const hasEntered = processedCustomers.some(p => p.ticketNumber === customer.ticketNumber);
-        
-        switch (filter) {
-            case 'entered': return hasEntered;
-            case 'not-entered': return !hasEntered;
-            default: return true;
-        }
-    });
-    
-    return filtered;
-}
-
-function getFilteredEntries() {
-    const searchTerm = document.getElementById('entrySearchInput')?.value.toLowerCase() || '';
-    const dateFilter = document.getElementById('entryDateFilter')?.value || '';
-    
-    let filtered = processedCustomers.filter(entry => {
-        const matchesSearch = 
-            entry.name.toLowerCase().includes(searchTerm) ||
-            entry.ticketNumber.toString().includes(searchTerm);
-        
-        if (!matchesSearch) return false;
-        
-        if (dateFilter) {
-            const entryDate = new Date(entry.entryTime).toISOString().split('T')[0];
-            if (entryDate !== dateFilter) return false;
-        }
-        
-        return true;
-    });
-    
-    // 新しい順にソート
-    return filtered.sort((a, b) => new Date(b.entryTime) - new Date(a.entryTime));
-}
-
-function filterCustomerList() {
-    displayCustomerList();
-}
-
-function filterEntryList() {
-    displayEntryList();
-}
-
-function showCustomerDetailFromList(ticketNumber) {
-    const customer = customers.find(c => c.ticketNumber.toString() === ticketNumber);
-    if (customer) {
-        showCustomerInfo(customer);
+  }
+  
+  // CSV エクスポート
+  function exportToCSV() {
+    if (entryData.length === 0) {
+      alert('❌ エクスポートする入場記録がありません');
+      return;
     }
-}
-
-function displayCustomerEntryHistory(customer) {
-    const historySection = document.getElementById('entryHistory');
-    const historyList = document.getElementById('entryHistoryList');
     
-    if (!historySection || !historyList) return;
-    
-    const customerEntries = processedCustomers.filter(p => p.ticketNumber === customer.ticketNumber);
-    
-    if (customerEntries.length > 0) {
-        historySection.classList.remove('hidden');
-        historyList.innerHTML = customerEntries.map((entry, index) => `
-            <div class="history-item">
-                <div class="history-time">${entry.entryTime}</div>
-                <div class="history-details">入場人数: ${entry.entryCount || entry.tickets || 1}名</div>
-            </div>
-        `).join('');
-    } else {
-        historySection.classList.add('hidden');
-    }
-}
-
-function exportData() {
-    const csvData = generateCSVData();
-    downloadCSV(csvData, `入場記録_${new Date().toISOString().split('T')[0]}.csv`);
-    showMessage('データをCSVファイルでダウンロードしました');
-}
-
-function generateCSVData() {
-    const headers = ['入場時刻', 'チケット番号', '名前', 'メールアドレス', '入場人数', '座席番号'];
-    const rows = processedCustomers.map(entry => [
-        entry.entryTime,
+    const headers = ['チケット番号', '顧客名', '入場人数', '入場時刻'];
+    const csvContent = [
+      headers.join(','),
+      ...entryData.map(entry => [
         entry.ticketNumber,
-        entry.name,
-        entry.email,
-        entry.entryCount || entry.tickets || 1,
-        entry.seatNumber || ''
-    ]);
+        entry.customerName,
+        entry.entryCount,
+        new Date(entry.entryTime).toLocaleString('ja-JP')
+      ].join(','))
+    ].join('\n');
     
-    return [headers, ...rows].map(row => 
-        row.map(cell => `"${cell}"`).join(',')
-    ).join('\n');
-}
-
-function downloadCSV(csvContent, filename) {
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
     
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-}
-
-function clearEntryData() {
-    if (confirm('本当に入場記録をすべてクリアしますか？この操作は元に戻せません。')) {
-        processedCustomers = [];
-        saveProcessedCustomers();
-        updateStats();
-        showMessage('入場記録をクリアしました');
-        showDataMenuScreen();
-    }
-}
-
-// === ユーティリティ ===
-function showLoading(show) {
-    const loading = document.getElementById('loading');
-    if (loading) {
-        if (show) {
-            loading.classList.remove('hidden');
-        } else {
-            loading.classList.add('hidden');
-        }
-    }
-}
-
-function showMessage(message, type = 'info') {
-    console.log('メッセージ:', message);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `入場記録_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
     
-    const existingMessages = document.querySelectorAll('.app-message');
-    existingMessages.forEach(msg => msg.remove());
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     
-    const colors = {
-        success: '#4CAF50',
-        error: '#f44336', 
-        warning: '#FF9800',
-        info: '#2196F3'
-    };
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'app-message';
-    messageDiv.textContent = message;
-    messageDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: ${colors[type] || colors.info};
-        color: white;
-        padding: 15px 25px;
-        border-radius: 8px;
-        z-index: 9999;
-        font-size: 16px;
-        font-weight: bold;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    `;
-    
-    document.body.appendChild(messageDiv);
-    
-    setTimeout(() => {
-        if (messageDiv.parentNode) {
-            messageDiv.remove();
-        }
-    }, 4000);
-}
-
-function playSuccessSound() {
-    try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
-    } catch (error) {
-        console.log('音声再生不可');
-    }
-}
-
-function playErrorSound() {
-    try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
-    } catch (error) {
-        console.log('音声再生不可');
-    }
-}
-
-function getDeviceId() {
-    let deviceId = localStorage.getItem('deviceId');
-    if (!deviceId) {
-        deviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        localStorage.setItem('deviceId', deviceId);
-    }
-    return deviceId;
-}
-
-// === ページ離脱時のクリーンアップ ===
-window.addEventListener('beforeunload', function() {
-    console.log('👋 アプリ終了 - カメラリソース解放');
-    completelyStopScanner();
+    alert('✅ CSVファイルをダウンロードしました');
+  }
+  
+  // 初期化完了
+  console.log('✅ 入場管理アプリの初期化が完了しました');
+  
+  // 初回データ読み込み（オンライン優先）
+  if (CONFIG.PREFER_ONLINE_DATA) {
+    fetchCustomerData().then(success => {
+      if (success) {
+        console.log('🌐 初回オンラインデータ取得完了');
+      } else {
+        console.log('📱 オフラインデータで動作中');
+      }
+    });
+  }
 });
-
-// === Service Worker登録 ===
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
-        .then(registration => {
-            console.log('Service Worker登録成功');
-        })
-        .catch(error => {
-            console.log('Service Worker登録スキップ:', error.message);
-        });
-}
-
-console.log('🚀 カメラ許可問題解決版 script.js 読み込み完了');
