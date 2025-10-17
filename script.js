@@ -762,3 +762,65 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+// 背面カメラでQRスキャン開始
+async function startBackCameraScan() {
+  const readerElId = "qrReader"; // index.htmlに存在
+  const html5QrCode = new Html5Qrcode(readerElId);
+
+  // 1) facingMode指定で試す
+  try {
+    await html5QrCode.start(
+      { facingMode: { exact: "environment" } },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      onScanSuccess,
+      onScanFailure
+    );
+    window.__qr = html5QrCode;
+    return;
+  } catch (_) {}
+
+  // 2) デバイス列挙 → "back"/"rear"/"environment" を含むIDを選択
+  const cameras = await Html5Qrcode.getCameras();
+  if (!cameras || !cameras.length) throw new Error("カメラが見つかりません");
+  const back = cameras.find(c =>
+    /back|rear|environment/i.test(`${c.label} ${c.id}`)
+  ) || cameras[0]; // フォールバック
+
+  await html5QrCode.start(
+    back.id,
+    { fps: 10, qrbox: { width: 240, height: 240 } },
+    onScanSuccess,
+    onScanFailure
+  );
+  window.__qr = html5QrCode;
+}
+
+// 既存の開始ボタンと接続（index.htmlに#startQRScanあり）
+document.getElementById("startQRScan")?.addEventListener("click", async () => {
+  document.getElementById("qrScanScreen")?.classList.remove("hidden");
+  document.getElementById("mainScreen")?.classList.add("hidden");
+  setScanStatus("scanning", "カメラを起動しています…");
+  try {
+    await startBackCameraScan();
+    setScanStatus("scanning", "QRコードをカメラに向けてください");
+  } catch (e) {
+    setScanStatus("error", `カメラ起動に失敗：${e.message}`);
+  }
+});
+
+// 既存UIに合わせた状態表示（index.htmlに#qrScanStatusあり）
+function setScanStatus(kind, text) {
+  const el = document.getElementById("qrScanStatus");
+  if (!el) return;
+  el.className = `scan-status ${kind}`;
+  el.textContent = text || "";
+}
+
+// トーチ切替（端末対応時のみ）
+async function toggleTorch(on = true) {
+  try {
+    await window.__qr?.applyVideoConstraints({ advanced: [{ torch: on }] });
+  } catch (_) { /* 非対応端末は無視 */ }
+}
+
