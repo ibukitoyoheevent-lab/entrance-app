@@ -1,24 +1,25 @@
 {
-    "name": "入場管理アプリ",
-    "short_name": "入場管理",
-    "description": "イベント入場管理用PWAアプリ",
-    "start_url": "./",
-    "display": "standalone",
-    "orientation": "portrait",
-    "theme_color": "#2196F3",
-    "background_color": "#ffffff",
-    "icons": [
-        {
-            "src": "./icons/icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any maskable"
-        },
-        {
-            "src": "./icons/icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any maskable"
-        }
-    ]
+  "name": "入場管理アプリ",
+  "short_name": "入場管理",
+  "description": "イベント入場管理用PWAアプリケーション",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2196F3",
+  "background_color": "#ffffff",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
