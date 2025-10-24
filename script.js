@@ -1,6 +1,6 @@
 // 入場管理アプリのメイン設定
 const CONFIG = {
-  GOOGLE_APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzhMroDqsp9_fNtxRoj9Qcl39iY2YXGQdc5HxT0AFbEppDLz2kguHQGgmxB6nig-S-W/exec',
+  GOOGLE_APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxp-8OZTg33O_yqXxuEED69X5W94T7211UNCNZ0AesICz0Km4wWiVGt0ussZCRe8YJW/exec',
   STORAGE_KEY: 'entryManagementData',
   CUSTOMER_STORAGE_KEY: 'customerData',
   CAMERA_PREFERENCE: 'environment', // 'user' for front camera, 'environment' for rear camera
