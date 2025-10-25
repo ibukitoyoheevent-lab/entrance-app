@@ -741,3 +741,59 @@ function addClickListener(id, handler) {
     element.addEventListener('click', handler);
   }
 }
+
+// グローバル変数セクションに追加
+let currentCameraIndex = 0;
+let availableCamerasList = [];
+
+// カメラ切り替え関数（script.jsの最後に追加）
+async function flipCamera() {
+  try {
+    if (availableCamerasList.length === 0) {
+      availableCamerasList = await Html5Qrcode.getCameras();
+    }
+    
+    if (availableCamerasList.length < 2) {
+      alert('切り替え可能なカメラがありません');
+      return;
+    }
+    
+    // 現在のスキャンを停止
+    if (html5QrCode && isScanning) {
+      await html5QrCode.stop();
+      isScanning = false;
+    }
+    
+    // 次のカメラに切り替え
+    currentCameraIndex = (currentCameraIndex + 1) % availableCamerasList.length;
+    const nextCamera = availableCamerasList[currentCameraIndex];
+    
+    console.log('🔄 カメラ切り替え:', nextCamera.label);
+    
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+    
+    await html5QrCode.start(
+      nextCamera.id,
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+    
+    isScanning = true;
+    updateScanStatus('カメラ切り替え: ' + nextCamera.label, 'success');
+    
+    setTimeout(() => {
+      if (isScanning && !isPaused) {
+        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      }
+    }, 3000);
+    
+  } catch (error) {
+    console.error('カメラ切り替えエラー:', error);
+    alert('カメラ切り替えに失敗しました');
+  }
+}
