@@ -219,7 +219,7 @@ async function saveEntry(customer, entryCount) {
 // ==========================================
 
 async function startQRScanner() {
-  console.log('📷 QRスキャナー開始 (外カメラ優先)');
+  debugLog('QRスキャナー開始', 'カメラ優先: environment');
   
   if (!html5QrCode) {
     html5QrCode = new Html5Qrcode("qrReader");
@@ -232,30 +232,79 @@ async function startQRScanner() {
   };
   
   try {
-    const cameras = await Html5Qrcode.getCameras();
+    console.log('🎥 カメラ起動開始...');
     
-    if (!cameras || cameras.length === 0) {
+    // iPhone対策: facingMode exact指定を最優先
+    try {
+      await html5QrCode.start(
+        { facingMode: { exact: "environment" } },
+        config,
+        onScanSuccess,
+        onScanFailure
+      );
+      
+      console.log('✅ 外カメラで起動成功（exact指定）');
+      isScanning = true;
+      cameraInitialized = true;
+      updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      
+      // カメラ切り替えボタンを表示
+      showFlipCameraButton();
+      return;
+      
+    } catch (exactError) {
+      console.log('exact指定失敗。別の方法を試します...');
+    }
+    
+    // 方法2: ideal指定
+    try {
+      await html5QrCode.start(
+        { facingMode: { ideal: "environment" } },
+        config,
+        onScanSuccess,
+        onScanFailure
+      );
+      
+      console.log('✅ 外カメラで起動成功（ideal指定）');
+      isScanning = true;
+      cameraInitialized = true;
+      updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      showFlipCameraButton();
+      return;
+      
+    } catch (idealError) {
+      console.log('ideal指定失敗。カメラリストから選択します...');
+    }
+    
+    // 方法3: カメラリストから外カメラを選択
+    const cameras = await Html5Qrcode.getCameras();
+    console.log('利用可能なカメラ:', cameras.length, '台');
+    
+    if (cameras.length === 0) {
       throw new Error('利用可能なカメラが見つかりませんでした');
     }
     
-    console.log(`利用可能なカメラ: ${cameras.length}台`);
+    cameras.forEach((cam, i) => {
+      console.log(`  ${i+1}. ${cam.label}`);
+    });
     
-    // 外カメラを優先して選択
-    let selectedCamera = cameras[0];
+    // 外カメラを探す（最後のカメラが通常、背面カメラ）
+    let selectedCamera = cameras[cameras.length - 1];
     
-    const rearCamera = cameras.find(camera => 
-      camera.label && (
-        camera.label.toLowerCase().includes('back') ||
-        camera.label.toLowerCase().includes('rear') ||
-        camera.label.toLowerCase().includes('environment')
-      )
-    );
+    // ラベルで明示的に外カメラを探す
+    const rearCamera = cameras.find(cam => {
+      const label = cam.label.toLowerCase();
+      return label.includes('back') || 
+             label.includes('rear') || 
+             label.includes('environment') ||
+             label.includes('背面');
+    });
     
-    if (rearCamera && CONFIG.CAMERA_PREFERENCE === 'environment') {
+    if (rearCamera) {
       selectedCamera = rearCamera;
-      console.log('🎥 外カメラを選択:', selectedCamera.label);
+      console.log('✅ 外カメラを検出:', selectedCamera.label);
     } else {
-      console.log('🎥 カメラを選択:', selectedCamera.label);
+      console.log('⚠️ 外カメラ検出できず。最後のカメラを使用:', selectedCamera.label);
     }
     
     await html5QrCode.start(
@@ -265,29 +314,51 @@ async function startQRScanner() {
       onScanFailure
     );
     
-    console.log('✅ QRスキャナー開始成功');
+    console.log('✅ カメラ起動成功');
+    console.log('📷 使用中:', selectedCamera.label);
+    
     isScanning = true;
     cameraInitialized = true;
     updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+    showFlipCameraButton();
     
   } catch (error) {
-    console.error('❌ QRスキャナー開始エラー:', error);
+    console.error('❌ カメラ起動失敗:', error);
     updateScanStatus('カメラの起動に失敗しました', 'error');
     
-    let errorMessage = 'カメラへのアクセス許可が必要です。\n';
+    let errorMessage = 'カメラの起動に失敗しました。\n\n';
+    
     if (error.name === 'NotAllowedError') {
-      errorMessage += '• ブラウザでカメラ許可を「許可」に設定してください\n';
-      errorMessage += '• プライベートモードの場合は通常モードをお試しください';
-    } else if (error.name === 'NotFoundError') {
-      errorMessage += '• カメラが見つかりません\n• デバイスにカメラが接続されているか確認してください';
+      errorMessage += '【対処法】\n';
+      errorMessage += '1. Safariのアドレスバー左の「AA」をタップ\n';
+      errorMessage += '2. 「Webサイトの設定」をタップ\n';
+      errorMessage += '3. 「カメラ」を「許可」に変更\n';
+      errorMessage += '4. ページを再読み込み';
     } else {
-      errorMessage += '• ブラウザの設定を確認してください\n• ページを再読み込みしてお試しください';
+      errorMessage += '【対処法】\n';
+      errorMessage += '• ページを再読み込み\n';
+      errorMessage += '• Safariを再起動\n';
+      errorMessage += '• iPhoneを再起動';
     }
     
     alert(errorMessage);
   }
 }
 
+// カメラ切り替えボタン表示関数
+async function showFlipCameraButton() {
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (cameras.length > 1) {
+      const flipBtn = document.getElementById('flipCameraBtn');
+      if (flipBtn) {
+        flipBtn.style.display = 'inline-block';
+      }
+    }
+  } catch (error) {
+    console.error('ボタン表示エラー:', error);
+  }
+}
 function onScanSuccess(decodedText, decodedResult) {
   console.log('✅ QRコード読み取り成功:', decodedText);
   
