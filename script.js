@@ -18,6 +18,8 @@ let continuousScanMode = true;
 let cameraInitialized = false;
 let processedCustomers = new Set();
 let currentCustomer = null; // 現在処理中の顧客情報
+let currentCameraIndex = 0;
+let availableCamerasList = [];
 
 // アプリ初期化
 document.addEventListener('DOMContentLoaded', function() {
@@ -219,7 +221,7 @@ async function saveEntry(customer, entryCount) {
 // ==========================================
 
 async function startQRScanner() {
-  debugLog('QRスキャナー開始', 'カメラ優先: environment');
+  console.log('🎥 QRスキャナー開始 - カメラ優先: environment (外カメラ)');
   
   if (!html5QrCode) {
     html5QrCode = new Html5Qrcode("qrReader");
@@ -253,7 +255,7 @@ async function startQRScanner() {
       return;
       
     } catch (exactError) {
-      console.log('exact指定失敗。別の方法を試します...');
+      console.log('⚠️ exact指定失敗。別の方法を試します...', exactError.message);
     }
     
     // 方法2: ideal指定
@@ -273,16 +275,19 @@ async function startQRScanner() {
       return;
       
     } catch (idealError) {
-      console.log('ideal指定失敗。カメラリストから選択します...');
+      console.log('⚠️ ideal指定失敗。カメラリストから選択します...', idealError.message);
     }
     
     // 方法3: カメラリストから外カメラを選択
     const cameras = await Html5Qrcode.getCameras();
-    console.log('利用可能なカメラ:', cameras.length, '台');
+    console.log('📷 利用可能なカメラ:', cameras.length, '台');
     
     if (cameras.length === 0) {
       throw new Error('利用可能なカメラが見つかりませんでした');
     }
+    
+    // カメラリストを保存（切り替え用）
+    availableCamerasList = cameras;
     
     cameras.forEach((cam, i) => {
       console.log(`  ${i+1}. ${cam.label}`);
@@ -290,22 +295,28 @@ async function startQRScanner() {
     
     // 外カメラを探す（最後のカメラが通常、背面カメラ）
     let selectedCamera = cameras[cameras.length - 1];
+    let selectedIndex = cameras.length - 1;
     
     // ラベルで明示的に外カメラを探す
-    const rearCamera = cameras.find(cam => {
+    const rearCameraIndex = cameras.findIndex(cam => {
       const label = cam.label.toLowerCase();
       return label.includes('back') || 
              label.includes('rear') || 
              label.includes('environment') ||
-             label.includes('背面');
+             label.includes('背面') ||
+             label.includes('リア');
     });
     
-    if (rearCamera) {
-      selectedCamera = rearCamera;
+    if (rearCameraIndex !== -1) {
+      selectedCamera = cameras[rearCameraIndex];
+      selectedIndex = rearCameraIndex;
       console.log('✅ 外カメラを検出:', selectedCamera.label);
     } else {
       console.log('⚠️ 外カメラ検出できず。最後のカメラを使用:', selectedCamera.label);
     }
+    
+    // 現在のカメラインデックスを保存
+    currentCameraIndex = selectedIndex;
     
     await html5QrCode.start(
       selectedCamera.id,
@@ -334,11 +345,18 @@ async function startQRScanner() {
       errorMessage += '2. 「Webサイトの設定」をタップ\n';
       errorMessage += '3. 「カメラ」を「許可」に変更\n';
       errorMessage += '4. ページを再読み込み';
+    } else if (error.name === 'NotFoundError') {
+      errorMessage += '【原因】\n';
+      errorMessage += 'カメラが見つかりませんでした\n\n';
+      errorMessage += '【対処法】\n';
+      errorMessage += '• 他のアプリがカメラを使用していないか確認\n';
+      errorMessage += '• デバイスを再起動してください';
     } else {
       errorMessage += '【対処法】\n';
       errorMessage += '• ページを再読み込み\n';
       errorMessage += '• Safariを再起動\n';
-      errorMessage += '• iPhoneを再起動';
+      errorMessage += '• iPhoneを再起動\n\n';
+      errorMessage += `エラー詳細: ${error.message}`;
     }
     
     alert(errorMessage);
@@ -348,17 +366,19 @@ async function startQRScanner() {
 // カメラ切り替えボタン表示関数
 async function showFlipCameraButton() {
   try {
-    const cameras = await Html5Qrcode.getCameras();
+    const cameras = availableCamerasList.length > 0 ? availableCamerasList : await Html5Qrcode.getCameras();
     if (cameras.length > 1) {
       const flipBtn = document.getElementById('flipCameraBtn');
       if (flipBtn) {
         flipBtn.style.display = 'inline-block';
+        console.log('🔄 カメラ切り替えボタンを表示');
       }
     }
   } catch (error) {
     console.error('ボタン表示エラー:', error);
   }
 }
+
 function onScanSuccess(decodedText, decodedResult) {
   console.log('✅ QRコード読み取り成功:', decodedText);
   
@@ -422,9 +442,67 @@ function stopQRScanner() {
       isScanning = false;
       isPaused = false;
       cameraInitialized = false;
+      
+      // カメラ切り替えボタンを非表示
+      const flipBtn = document.getElementById('flipCameraBtn');
+      if (flipBtn) {
+        flipBtn.style.display = 'none';
+      }
     }).catch(err => {
       console.error('QRスキャナー停止エラー:', err);
     });
+  }
+}
+
+// カメラ切り替え関数
+async function flipCamera() {
+  try {
+    if (availableCamerasList.length === 0) {
+      availableCamerasList = await Html5Qrcode.getCameras();
+    }
+    
+    if (availableCamerasList.length < 2) {
+      alert('切り替え可能なカメラがありません');
+      return;
+    }
+    
+    // 現在のスキャンを停止
+    if (html5QrCode && isScanning) {
+      await html5QrCode.stop();
+      isScanning = false;
+    }
+    
+    // 次のカメラに切り替え
+    currentCameraIndex = (currentCameraIndex + 1) % availableCamerasList.length;
+    const nextCamera = availableCamerasList[currentCameraIndex];
+    
+    console.log('🔄 カメラ切り替え:', nextCamera.label);
+    
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+    
+    await html5QrCode.start(
+      nextCamera.id,
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+    
+    isScanning = true;
+    updateScanStatus('カメラ切り替え: ' + nextCamera.label, 'success');
+    
+    setTimeout(() => {
+      if (isScanning && !isPaused) {
+        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      }
+    }, 3000);
+    
+  } catch (error) {
+    console.error('❌ カメラ切り替えエラー:', error);
+    alert('カメラ切り替えに失敗しました\n\nエラー: ' + error.message);
   }
 }
 
@@ -619,6 +697,9 @@ function setupEventListeners() {
     showScreen('manualEntryScreen');
   });
   
+  // カメラ切り替えボタン
+  addClickListener('flipCameraBtn', flipCamera);
+  
   // 手動入力画面
   addClickListener('backToMain', () => {
     showScreen('mainScreen');
@@ -739,61 +820,16 @@ function addClickListener(id, handler) {
   const element = document.getElementById(id);
   if (element) {
     element.addEventListener('click', handler);
+  } else {
+    console.warn(`⚠️ 要素が見つかりません: ${id}`);
   }
 }
 
-// グローバル変数セクションに追加
-let currentCameraIndex = 0;
-let availableCamerasList = [];
-
-// カメラ切り替え関数（script.jsの最後に追加）
-async function flipCamera() {
-  try {
-    if (availableCamerasList.length === 0) {
-      availableCamerasList = await Html5Qrcode.getCameras();
-    }
-    
-    if (availableCamerasList.length < 2) {
-      alert('切り替え可能なカメラがありません');
-      return;
-    }
-    
-    // 現在のスキャンを停止
-    if (html5QrCode && isScanning) {
-      await html5QrCode.stop();
-      isScanning = false;
-    }
-    
-    // 次のカメラに切り替え
-    currentCameraIndex = (currentCameraIndex + 1) % availableCamerasList.length;
-    const nextCamera = availableCamerasList[currentCameraIndex];
-    
-    console.log('🔄 カメラ切り替え:', nextCamera.label);
-    
-    const config = {
-      fps: 10,
-      qrbox: { width: 250, height: 250 },
-      aspectRatio: 1.0
-    };
-    
-    await html5QrCode.start(
-      nextCamera.id,
-      config,
-      onScanSuccess,
-      onScanFailure
-    );
-    
-    isScanning = true;
-    updateScanStatus('カメラ切り替え: ' + nextCamera.label, 'success');
-    
-    setTimeout(() => {
-      if (isScanning && !isPaused) {
-        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-      }
-    }, 3000);
-    
-  } catch (error) {
-    console.error('カメラ切り替えエラー:', error);
-    alert('カメラ切り替えに失敗しました');
-  }
+// Service Worker登録（PWA対応）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => console.log('✅ Service Worker登録成功'))
+      .catch(error => console.log('❌ Service Worker登録失敗:', error));
+  });
 }
