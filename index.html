@@ -43,31 +43,35 @@
     </div>
   </div>
 
-  <!-- QRスキャン画面 -->
-  <div class="screen hidden" id="qrScanScreen">
-    <div class="container">
-      <div class="screen-header">
-        <button id="stopQRScan" class="btn-danger btn-small">← 戻る</button>
-        <h2>QRコード読み取り</h2>
-      </div>
+  <!-- QRスキャン画面（修正版） -->
+<div class="screen hidden" id="qrScanScreen">
+  <div class="container">
+    <div class="screen-header">
+      <button id="stopQRScan" class="btn-danger btn-small">← 戻る</button>
+      <h2>QRコード読み取り</h2>
+    </div>
 
-      <div id="qrReader"></div>
-      <p id="qrScanStatus" class="scan-status">QRコードをカメラに向けてください</p>
+    <!-- カメラ表示エリア -->
+    <div id="qrReader"></div>
+    
+    <!-- ステータス表示 -->
+    <p id="qrScanStatus" class="scan-status">QRコードをカメラに向けてください</p>
 
-      <div class="scan-controls">
-        <button id="pauseResumeBtn" class="btn-warning">⏸️ 一時停止</button>
-        <button id="continuousModeBtn" class="btn-success">🔄 連続スキャン: ON</button>
-        <button id="switchToManual" class="btn-secondary btn-full">📝 手動入力に切り替え</button>
-      </div>
+    <!-- カメラ切り替えボタン -->
+    <div style="text-align: center; margin: 16px 0;">
+      <button id="flipCameraBtn" class="btn-warning" style="display: none;">
+        🔄 カメラを切り替え
+      </button>
+    </div>
+
+    <!-- スキャンコントロール -->
+    <div class="scan-controls">
+      <button id="pauseResumeBtn" class="btn-warning">⏸️ 一時停止</button>
+      <button id="continuousModeBtn" class="btn-success">🔄 連続スキャン: ON</button>
+      <button id="switchToManual" class="btn-secondary btn-full">📝 手動入力に切り替え</button>
     </div>
   </div>
-  
-<div style="text-align: center; margin: 16px 0;">
-  <button id="flipCameraBtn" class="btn-warning" style="display: none;">
-    🔄 カメラを切り替え
-  </button>
 </div>
-  
   
   <!-- 手動入力画面 -->
   <div class="screen hidden" id="manualEntryScreen">
