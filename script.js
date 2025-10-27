@@ -791,15 +791,28 @@ function setupEventListeners() {
   });
   
   // 完了画面
-  addClickListener('nextCustomer', () => {
-    console.log('➡️ 次の顧客へ');
-    if (continuousScanMode && cameraInitialized) {
-      showScreen('qrScanScreen');
-      resumeQRScanner();
-    } else {
-      showScreen('mainScreen');
-    }
-  });
+　　addClickListener('nextCustomer', () => {
+  console.log('➡️ 次の顧客へ - QRスキャン画面に戻る');
+  showScreen('qrScanScreen');
+  resumeQRScanner();
+});
+
+　　// または、さらに安全な版（カメラが停止している場合は再起動）
+　　addClickListener('nextCustomer', () => {
+  console.log('➡️ 次の顧客へ - QRスキャン画面に戻る');
+  showScreen('qrScanScreen');
+  
+  // カメラが既に動いている場合は再開、停止している場合は再起動
+  if (isScanning && isPaused) {
+    resumeQRScanner();
+  } else if (!isScanning) {
+    startQRScanner();
+  } else {
+    // 既に動いている場合はそのまま
+    updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+  }
+});
+
   
   // データ管理メニュー
   addClickListener('backToMainFromMenu', () => {
