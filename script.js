@@ -3,9 +3,10 @@ const CONFIG = {
   GOOGLE_APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx5M1F8vLTzURCoMUN1Op3SGmxAvtpaJCkJmg9a5qgRbIFkgPaAvRJP6oH3AC2KrUlr/exec',
   STORAGE_KEY: 'entryManagementData',
   CUSTOMER_STORAGE_KEY: 'customerData',
-  CAMERA_PREFERENCE: 'environment', // 'user' for front camera, 'environment' for rear camera
+  CAMERA_PREFERENCE: 'environment',
   PREFER_ONLINE_DATA: true,
-  FALLBACK_SAMPLE_DATA: false
+  FALLBACK_SAMPLE_DATA: false,
+  CAMERA_TIMEOUT: 10000 // 10秒でタイムアウト
 };
 
 // グローバル変数
@@ -17,22 +18,23 @@ let isPaused = false;
 let continuousScanMode = true;
 let cameraInitialized = false;
 let processedCustomers = new Set();
-let currentCustomer = null; // 現在処理中の顧客情報
+let currentCustomer = null;
 let currentCameraIndex = 0;
 let availableCamerasList = [];
+let cameraStartTimeout = null;
 
 // アプリ初期化
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('✅ 入場管理アプリが読み込まれました (外カメラ・オンライン優先版)');
+  console.log('✅ 入場管理アプリが読み込まれました');
   
   // 初期データ読み込み
   loadStoredData();
   updateStats();
   
-  // イベントリスナー設定
+  // イベントリスナー設定（1回のみ）
   setupEventListeners();
   
-  // 初回データ読み込み（オンライン優先）
+  // 初回データ読み込み
   if (CONFIG.PREFER_ONLINE_DATA) {
     fetchCustomerData().then(success => {
       if (success) {
@@ -94,10 +96,16 @@ async function fetchCustomerData() {
     showLoading();
     console.log('📡 Google Sheetsからオンラインデータを取得中...');
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    
     const response = await fetch(CONFIG.GOOGLE_APPS_SCRIPT_URL + '?action=getCustomers', {
       method: 'GET',
-      cache: 'no-cache'
+      cache: 'no-cache',
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
@@ -128,9 +136,7 @@ async function fetchCustomerData() {
       updateStats();
       return false;
     } else {
-      alert('❌ オンラインデータの取得に失敗しました\n' +
-            'インターネット接続とGoogle Apps Scriptの設定を確認してください\n\n' +
-            'エラー: ' + error.message);
+      alert('❌ オンラインデータの取得に失敗しました\nオフラインデータを使用します');
       return false;
     }
   } finally {
@@ -187,6 +193,9 @@ async function saveEntry(customer, entryCount) {
     try {
       console.log('📤 Google Sheetsに入場記録を送信中...');
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const response = await fetch(CONFIG.GOOGLE_APPS_SCRIPT_URL, {
         method: 'POST',
         headers: {
@@ -199,8 +208,11 @@ async function saveEntry(customer, entryCount) {
           entryCount: entry.entryCount,
           entryTime: entry.entryTime,
           timestamp: entry.timestamp
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       const result = await response.json();
       if (result.success) {
@@ -216,15 +228,22 @@ async function saveEntry(customer, entryCount) {
   return entry;
 }
 
-// startQRScanner関数の修正版（PC Chrome対応）
+// ==========================================
+// QRコードスキャン（タイムアウト付き高速版）
+// ==========================================
+
 async function startQRScanner() {
-  console.log('🎥 QRスキャナー開始 - カメラ優先: environment (外カメラ)');
+  console.log('🎥 QRスキャナー開始');
+  
+  // 既存のタイムアウトをクリア
+  if (cameraStartTimeout) {
+    clearTimeout(cameraStartTimeout);
+  }
   
   if (!html5QrCode) {
     html5QrCode = new Html5Qrcode("qrReader");
   }
   
-  // カメラ起動準備表示
   const qrReaderElement = document.getElementById('qrReader');
   if (qrReaderElement) {
     qrReaderElement.classList.remove('camera-ready');
@@ -232,136 +251,28 @@ async function startQRScanner() {
   
   const config = {
     fps: 10,
-    qrbox: { width: 250, height: 250 },
-    aspectRatio: 1.0,
-    disableFlip: false, // カメラ反転を許可
-    videoConstraints: {
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    }
+    qrbox: { width: 250, height: 250 }
   };
   
+  updateScanStatus('カメラ起動中...', 'scanning');
+  
+  // タイムアウト設定
+  const timeoutPromise = new Promise((_, reject) => {
+    cameraStartTimeout = setTimeout(() => {
+      reject(new Error('CAMERA_TIMEOUT'));
+    }, CONFIG.CAMERA_TIMEOUT);
+  });
+  
   try {
-    console.log('🎥 カメラ起動開始...');
-    updateScanStatus('カメラ起動中...', 'scanning');
+    // タイムアウト付きでカメラ起動
+    await Promise.race([
+      startCameraWithFallback(config),
+      timeoutPromise
+    ]);
     
-    // 方法1: facingMode exact指定（iPhone最優先）
-    try {
-      await html5QrCode.start(
-        { facingMode: { exact: "environment" } },
-        config,
-        onScanSuccess,
-        onScanFailure
-      );
-      
-      console.log('✅ 外カメラで起動成功（exact指定）');
-      if (qrReaderElement) qrReaderElement.classList.add('camera-ready');
-      isScanning = true;
-      cameraInitialized = true;
-      updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-      showFlipCameraButton();
-      return;
-      
-    } catch (exactError) {
-      console.log('⚠️ exact指定失敗:', exactError.message);
-    }
-    
-    // 方法2: facingMode ideal指定
-    try {
-      await html5QrCode.start(
-        { facingMode: { ideal: "environment" } },
-        config,
-        onScanSuccess,
-        onScanFailure
-      );
-      
-      console.log('✅ カメラ起動成功（ideal指定）');
-      if (qrReaderElement) qrReaderElement.classList.add('camera-ready');
-      isScanning = true;
-      cameraInitialized = true;
-      updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-      showFlipCameraButton();
-      return;
-      
-    } catch (idealError) {
-      console.log('⚠️ ideal指定失敗:', idealError.message);
-    }
-    
-    // 方法3: facingMode文字列指定（PC Chrome用）
-    try {
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        onScanSuccess,
-        onScanFailure
-      );
-      
-      console.log('✅ カメラ起動成功（文字列指定）');
-      if (qrReaderElement) qrReaderElement.classList.add('camera-ready');
-      isScanning = true;
-      cameraInitialized = true;
-      updateScanStatus('QRコードをカメラに向けてください', 'scanning');
-      showFlipCameraButton();
-      return;
-      
-    } catch (stringError) {
-      console.log('⚠️ 文字列指定失敗:', stringError.message);
-    }
-    
-    // 方法4: カメラリストから選択
-    console.log('📷 カメラリストを取得中...');
-    const cameras = await Html5Qrcode.getCameras();
-    console.log('📷 利用可能なカメラ:', cameras.length, '台');
-    
-    if (cameras.length === 0) {
-      throw new Error('利用可能なカメラが見つかりませんでした');
-    }
-    
-    // カメラリストを保存
-    availableCamerasList = cameras;
-    
-    cameras.forEach((cam, i) => {
-      console.log(`  ${i+1}. ID: ${cam.id}, ラベル: ${cam.label}`);
-    });
-    
-    // 外カメラを探す
-    let selectedCamera = null;
-    let selectedIndex = -1;
-    
-    // ラベルで外カメラを検索
-    const rearCameraIndex = cameras.findIndex(cam => {
-      const label = cam.label.toLowerCase();
-      return label.includes('back') || 
-             label.includes('rear') || 
-             label.includes('environment') ||
-             label.includes('背面') ||
-             label.includes('リア') ||
-             label.includes('背面カメラ');
-    });
-    
-    if (rearCameraIndex !== -1) {
-      selectedCamera = cameras[rearCameraIndex];
-      selectedIndex = rearCameraIndex;
-      console.log('✅ 外カメラを検出:', selectedCamera.label);
-    } else {
-      // 外カメラが見つからない場合は最後のカメラを使用
-      selectedCamera = cameras[cameras.length - 1];
-      selectedIndex = cameras.length - 1;
-      console.log('⚠️ 外カメラ未検出。最後のカメラを使用:', selectedCamera.label);
-    }
-    
-    currentCameraIndex = selectedIndex;
-    
-    // カメラIDで起動
-    await html5QrCode.start(
-      selectedCamera.id,
-      config,
-      onScanSuccess,
-      onScanFailure
-    );
-    
+    // 成功
+    clearTimeout(cameraStartTimeout);
     console.log('✅ カメラ起動成功');
-    console.log('📷 使用中:', selectedCamera.label);
     
     if (qrReaderElement) qrReaderElement.classList.add('camera-ready');
     isScanning = true;
@@ -370,80 +281,247 @@ async function startQRScanner() {
     showFlipCameraButton();
     
   } catch (error) {
+    clearTimeout(cameraStartTimeout);
     console.error('❌ カメラ起動失敗:', error);
+    
     if (qrReaderElement) qrReaderElement.classList.remove('camera-ready');
     updateScanStatus('カメラの起動に失敗しました', 'error');
     
-    // エラー種類別の詳細メッセージ
-    let errorMessage = 'カメラの起動に失敗しました。\n\n';
-    
-    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-      errorMessage += '【原因】カメラへのアクセスが拒否されています\n\n';
-      errorMessage += '【対処法】\n';
-      
-      // デバイス判定
-      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const isAndroid = /Android/i.test(navigator.userAgent);
-      
-      if (isIOS) {
-        errorMessage += '【iPhone/iPad】\n';
-        errorMessage += '1. Safariのアドレスバー左の「AA」をタップ\n';
-        errorMessage += '2. 「Webサイトの設定」をタップ\n';
-        errorMessage += '3. 「カメラ」を「許可」に変更\n';
-        errorMessage += '4. ページを再読み込み\n\n';
-        errorMessage += 'または\n';
-        errorMessage += '設定 → Safari → カメラ → 許可';
-      } else if (isAndroid) {
-        errorMessage += '【Android】\n';
-        errorMessage += '1. アドレスバーの左にある🔒アイコンをタップ\n';
-        errorMessage += '2. 「権限」をタップ\n';
-        errorMessage += '3. 「カメラ」を「許可」に変更\n';
-        errorMessage += '4. ページを再読み込み';
-      } else {
-        errorMessage += '【PC】\n';
-        errorMessage += '1. アドレスバーのカメラアイコンをクリック\n';
-        errorMessage += '2. 「このサイトでカメラを常に許可」を選択\n';
-        errorMessage += '3. ページを再読み込み';
-      }
-      
-    } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-      errorMessage += '【原因】カメラが見つかりませんでした\n\n';
-      errorMessage += '【対処法】\n';
-      errorMessage += '• 他のアプリがカメラを使用していないか確認\n';
-      errorMessage += '• カメラが物理的に接続されているか確認\n';
-      errorMessage += '• デバイスを再起動\n';
-      errorMessage += '• 別のブラウザで試す（Chrome, Safari, Firefox等）';
-      
-    } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-      errorMessage += '【原因】カメラが他のアプリで使用中です\n\n';
-      errorMessage += '【対処法】\n';
-      errorMessage += '• Zoom、Skype、カメラアプリなどを終了\n';
-      errorMessage += '• 他のブラウザタブでカメラを使用していないか確認\n';
-      errorMessage += '• デバイスを再起動';
-      
-    } else if (error.name === 'OverconstrainedError') {
-      errorMessage += '【原因】指定されたカメラ設定がサポートされていません\n\n';
-      errorMessage += '【対処法】\n';
-      errorMessage += '• 外カメラがない場合は内カメラを使用\n';
-      errorMessage += '• 「🔄 カメラ切り替え」ボタンで別のカメラを試す';
-      
-    } else if (error.name === 'SecurityError') {
-      errorMessage += '【原因】セキュリティエラー\n\n';
-      errorMessage += '【対処法】\n';
-      errorMessage += '• HTTPSで接続されているか確認\n';
-      errorMessage += '• ブラウザのセキュリティ設定を確認\n';
-      errorMessage += '• プライベートブラウズモードを無効化';
-      
+    if (error.message === 'CAMERA_TIMEOUT') {
+      alert(
+        '⏱️ カメラの起動がタイムアウトしました\n\n' +
+        '【対処法】\n' +
+        '1. 他のアプリがカメラを使用していないか確認\n' +
+        '2. ページを再読み込み\n' +
+        '3. デバイスを再起動\n\n' +
+        '※ 手動入力で代替できます'
+      );
     } else {
-      errorMessage += '【対処法】\n';
-      errorMessage += '• ページを再読み込み\n';
-      errorMessage += '• ブラウザを再起動\n';
-      errorMessage += '• デバイスを再起動\n';
-      errorMessage += '• 別のブラウザで試す\n\n';
-      errorMessage += `エラー詳細: ${error.name || 'Unknown'}\n${error.message}`;
+      showCameraError(error);
+    }
+  }
+}
+
+// カメラ起動のフォールバック処理
+async function startCameraWithFallback(config) {
+  // 方法1: facingMode指定
+  try {
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+    console.log('✅ facingModeで起動成功');
+    return;
+  } catch (e) {
+    console.log('⚠️ facingMode失敗:', e.message);
+  }
+  
+  // 方法2: カメラリストから選択
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    console.log('📷 利用可能なカメラ:', cameras.length, '台');
+    
+    if (cameras.length === 0) {
+      throw new Error('カメラが見つかりませんでした');
     }
     
-    alert(errorMessage);
+    availableCamerasList = cameras;
+    
+    // 外カメラを探す
+    let selectedCamera = cameras[cameras.length - 1];
+    let selectedIndex = cameras.length - 1;
+    
+    const rearKeywords = ['back', 'rear', 'environment', '背面', 'リア'];
+    const rearIndex = cameras.findIndex(cam => {
+      const label = (cam.label || '').toLowerCase();
+      return rearKeywords.some(kw => label.includes(kw));
+    });
+    
+    if (rearIndex !== -1) {
+      selectedCamera = cameras[rearIndex];
+      selectedIndex = rearIndex;
+      console.log('✅ 外カメラ検出:', selectedCamera.label);
+    }
+    
+    currentCameraIndex = selectedIndex;
+    
+    await html5QrCode.start(
+      selectedCamera.id,
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+    
+    console.log('✅ カメラリストから起動成功');
+    return;
+    
+  } catch (e) {
+    console.error('❌ カメラリスト取得失敗:', e);
+    throw e;
+  }
+}
+
+function showCameraError(error) {
+  let errorMessage = 'カメラの起動に失敗しました。\n\n';
+  
+  if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+    errorMessage += '【原因】カメラへのアクセスが拒否されています\n\n';
+    errorMessage += '【対処法】\n';
+    errorMessage += '1. ブラウザのカメラ権限を「許可」に設定\n';
+    errorMessage += '2. ページを再読み込み\n\n';
+    errorMessage += '※ 手動入力で代替できます';
+  } else if (error.name === 'NotFoundError') {
+    errorMessage += '【原因】カメラが見つかりませんでした\n\n';
+    errorMessage += '【対処法】\n';
+    errorMessage += '1. 他のアプリを終了\n';
+    errorMessage += '2. デバイスを再起動\n\n';
+    errorMessage += '※ 手動入力で代替できます';
+  } else {
+    errorMessage += '【対処法】\n';
+    errorMessage += '1. ページを再読み込み\n';
+    errorMessage += '2. ブラウザを再起動\n\n';
+    errorMessage += '※ 手動入力で代替できます\n\n';
+    errorMessage += `エラー: ${error.message}`;
+  }
+  
+  alert(errorMessage);
+}
+
+async function showFlipCameraButton() {
+  try {
+    if (availableCamerasList.length > 1) {
+      const flipBtn = document.getElementById('flipCameraBtn');
+      if (flipBtn) {
+        flipBtn.style.display = 'inline-block';
+      }
+    }
+  } catch (error) {
+    console.error('ボタン表示エラー:', error);
+  }
+}
+
+async function flipCamera() {
+  try {
+    if (availableCamerasList.length < 2) {
+      alert('切り替え可能なカメラがありません');
+      return;
+    }
+    
+    if (html5QrCode && isScanning) {
+      await html5QrCode.stop();
+      isScanning = false;
+    }
+    
+    currentCameraIndex = (currentCameraIndex + 1) % availableCamerasList.length;
+    const nextCamera = availableCamerasList[currentCameraIndex];
+    
+    console.log('🔄 カメラ切り替え:', nextCamera.label);
+    
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 }
+    };
+    
+    await html5QrCode.start(
+      nextCamera.id,
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+    
+    isScanning = true;
+    updateScanStatus('カメラ切り替え完了', 'success');
+    
+    setTimeout(() => {
+      if (isScanning && !isPaused) {
+        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      }
+    }, 2000);
+    
+  } catch (error) {
+    console.error('❌ カメラ切り替えエラー:', error);
+    alert('カメラ切り替えに失敗しました');
+  }
+}
+
+function onScanSuccess(decodedText, decodedResult) {
+  console.log('✅ QRコード読み取り成功:', decodedText);
+  
+  if (isPaused) return;
+  
+  updateScanStatus('QRコードを読み取りました', 'success');
+  
+  const customer = findCustomer(decodedText);
+  if (customer) {
+    currentCustomer = customer;
+    displayCustomerInfo(customer);
+    showScreen('customerInfoScreen');
+    
+    if (!continuousScanMode) {
+      pauseQRScanner();
+    }
+  } else {
+    updateScanStatus('該当する顧客が見つかりませんでした', 'error');
+    setTimeout(() => {
+      if (isScanning && !isPaused) {
+        updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+      }
+    }, 2000);
+  }
+}
+
+function onScanFailure(error) {
+  // エラーメッセージは表示しない（通常の動作）
+}
+
+function updateScanStatus(message, type = '') {
+  const statusElement = document.getElementById('qrScanStatus');
+  if (statusElement) {
+    statusElement.textContent = message;
+    statusElement.className = 'scan-status ' + type;
+  }
+}
+
+function pauseQRScanner() {
+  if (html5QrCode && isScanning && !isPaused) {
+    html5QrCode.pause();
+    isPaused = true;
+    updateScanStatus('スキャンを一時停止しました', 'paused');
+    console.log('⏸️ QRスキャナー一時停止');
+  }
+}
+
+function resumeQRScanner() {
+  if (html5QrCode && isScanning && isPaused) {
+    html5QrCode.resume();
+    isPaused = false;
+    updateScanStatus('QRコードをカメラに向けてください', 'scanning');
+    console.log('▶️ QRスキャナー再開');
+  }
+}
+
+function stopQRScanner() {
+  if (html5QrCode && isScanning) {
+    html5QrCode.stop().then(() => {
+      console.log('⏹️ QRスキャナー停止');
+      isScanning = false;
+      isPaused = false;
+      cameraInitialized = false;
+      
+      const flipBtn = document.getElementById('flipCameraBtn');
+      if (flipBtn) {
+        flipBtn.style.display = 'none';
+      }
+    }).catch(err => {
+      console.error('QRスキャナー停止エラー:', err);
+    });
+  }
+  
+  // タイムアウトもクリア
+  if (cameraStartTimeout) {
+    clearTimeout(cameraStartTimeout);
   }
 }
 
@@ -468,7 +546,6 @@ function displayCustomerInfo(customer) {
   document.getElementById('customerTickets').textContent = customer.ticketCount || '-';
   document.getElementById('customerSeat').textContent = customer.seatNumber || '-';
   
-  // 入場履歴表示
   const entryHistory = entryData.filter(entry => entry.ticketNumber === customer.ticketNumber);
   const historyElement = document.getElementById('entryHistory');
   const historyListElement = document.getElementById('entryHistoryList');
@@ -587,21 +664,33 @@ function exportToCSV() {
 }
 
 // ==========================================
-// イベントリスナー設定
+// イベントリスナー設定（重複登録防止）
 // ==========================================
 
+let listenersSetup = false;
+
 function setupEventListeners() {
+  if (listenersSetup) {
+    console.log('⚠️ イベントリスナーは既に設定済みです');
+    return;
+  }
+  
+  console.log('🔧 イベントリスナー設定中...');
+  
   // メイン画面
   addClickListener('startQRScan', () => {
+    console.log('📷 QRスキャン画面へ');
     showScreen('qrScanScreen');
     startQRScanner();
   });
   
   addClickListener('manualEntry', () => {
+    console.log('📝 手動入力画面へ');
     showScreen('manualEntryScreen');
   });
   
   addClickListener('updateBtn', async () => {
+    console.log('🔄 データ更新開始');
     const success = await fetchCustomerData();
     if (success) {
       alert('✅ オンラインデータを更新しました');
@@ -609,11 +698,13 @@ function setupEventListeners() {
   });
   
   addClickListener('menuBtn', () => {
+    console.log('📋 データ管理メニューへ');
     showScreen('dataMenuScreen');
   });
   
   // QRスキャン画面
   addClickListener('stopQRScan', () => {
+    console.log('⏹️ QRスキャン停止');
     stopQRScanner();
     showScreen('mainScreen');
   });
@@ -634,19 +725,21 @@ function setupEventListeners() {
   });
   
   addClickListener('switchToManual', () => {
+    console.log('📝 手動入力へ切り替え');
     stopQRScanner();
     showScreen('manualEntryScreen');
   });
   
-  // カメラ切り替えボタン
   addClickListener('flipCameraBtn', flipCamera);
   
   // 手動入力画面
   addClickListener('backToMain', () => {
+    console.log('🏠 メイン画面へ戻る');
     showScreen('mainScreen');
   });
   
   addClickListener('searchButton', () => {
+    console.log('🔍 顧客検索実行');
     const searchInput = document.getElementById('searchInput');
     const query = searchInput ? searchInput.value.trim() : '';
     
@@ -660,18 +753,18 @@ function setupEventListeners() {
       displayCustomerInfo(customer);
       showScreen('customerInfoScreen');
     } else {
-      alert('❌ 該当する顧客が見つかりませんでした\n\n' +
-            '• チケット番号、名前、メールアドレスで検索できます\n' +
-            '• 最新データを取得するには「データ更新」ボタンを押してください');
+      alert('❌ 該当する顧客が見つかりませんでした');
     }
   });
   
   // 顧客情報画面
   addClickListener('backToSearch', () => {
+    console.log('🔙 検索画面へ戻る');
     showScreen('manualEntryScreen');
   });
   
   addClickListener('confirmEntry', async () => {
+    console.log('✅ 入場確定処理開始');
     const entryCount = parseInt(document.getElementById('entryCountInput').value);
     
     if (!currentCustomer) {
@@ -683,7 +776,6 @@ function setupEventListeners() {
       showLoading();
       await saveEntry(currentCustomer, entryCount);
       
-      // 完了画面に遷移
       document.getElementById('completedCustomerName').textContent = currentCustomer.name;
       document.getElementById('completedTicketNumber').textContent = currentCustomer.ticketNumber;
       document.getElementById('completedTickets').textContent = entryCount;
@@ -700,6 +792,7 @@ function setupEventListeners() {
   
   // 完了画面
   addClickListener('nextCustomer', () => {
+    console.log('➡️ 次の顧客へ');
     if (continuousScanMode && cameraInitialized) {
       showScreen('qrScanScreen');
       resumeQRScanner();
@@ -710,20 +803,26 @@ function setupEventListeners() {
   
   // データ管理メニュー
   addClickListener('backToMainFromMenu', () => {
+    console.log('🏠 メイン画面へ戻る');
     showScreen('mainScreen');
   });
   
   addClickListener('viewCustomersBtn', () => {
+    console.log('👥 顧客一覧表示');
     displayCustomerList();
     showScreen('customerListScreen');
   });
   
   addClickListener('viewEntriesBtn', () => {
+    console.log('📋 入場記録一覧表示');
     displayEntryList();
     showScreen('entryListScreen');
   });
   
-  addClickListener('exportDataBtn', exportToCSV);
+  addClickListener('exportDataBtn', () => {
+    console.log('💾 CSV エクスポート');
+    exportToCSV();
+  });
   
   addClickListener('clearDataBtn', () => {
     if (confirm('⚠️ 入場記録を全て削除しますか?\nこの操作は取り消せません。')) {
@@ -737,36 +836,33 @@ function setupEventListeners() {
   
   // 顧客一覧画面
   addClickListener('backToMenuFromCustomers', () => {
+    console.log('📋 メニューへ戻る');
     showScreen('dataMenuScreen');
   });
   
   // 入場記録一覧画面
   addClickListener('backToMenuFromEntries', () => {
+    console.log('📋 メニューへ戻る');
     showScreen('dataMenuScreen');
   });
   
-  // ボタンにクリック時の視覚的フィードバックを追加
-  const allButtons = document.querySelectorAll('button');
-  allButtons.forEach((button) => {
-    button.addEventListener('click', function() {
-      button.style.transform = 'scale(0.95)';
-      setTimeout(() => {
-        button.style.transform = '';
-      }, 150);
-    });
-  });
+  listenersSetup = true;
+  console.log('✅ イベントリスナー設定完了');
 }
 
 function addClickListener(id, handler) {
   const element = document.getElementById(id);
   if (element) {
-    element.addEventListener('click', handler);
+    // 既存のリスナーを削除してから追加（重複防止）
+    const newElement = element.cloneNode(true);
+    element.parentNode.replaceChild(newElement, element);
+    newElement.addEventListener('click', handler);
   } else {
     console.warn(`⚠️ 要素が見つかりません: ${id}`);
   }
 }
 
-// Service Worker登録（PWA対応）
+// Service Worker登録
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
