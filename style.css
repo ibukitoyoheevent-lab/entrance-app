@@ -781,3 +781,148 @@ select:focus {
     font-size: 16px; /* ズーム防止 */
   }
 }
+
+/* ==========================================
+   カメラ表示エリアの修正
+   ========================================== */
+#qrReader {
+  width: 100%;
+  max-width: 500px;
+  margin: 20px auto;
+  border: 3px solid #2196F3;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #000;
+  min-height: 300px;
+  position: relative;
+}
+
+#qrReader video {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+  object-fit: cover;
+}
+
+#qrReader canvas {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+#qrReader__dashboard_section {
+  display: none !important;
+}
+
+#qrReader__scan_region {
+  border: 3px solid #4CAF50 !important;
+  border-radius: 8px;
+}
+
+#qrReader::before {
+  content: 'カメラ起動中...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 18px;
+  z-index: 1;
+  text-align: center;
+}
+
+#qrReader.camera-ready::before {
+  display: none;
+}
+
+.scan-status {
+  text-align: center;
+  padding: 15px;
+  margin: 15px 0;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 16px;
+  background-color: #E3F2FD;
+  color: #1976D2;
+}
+
+.scan-status.scanning {
+  background-color: #E8F5E9;
+  color: #388E3C;
+  animation: pulse 2s infinite;
+}
+
+.scan-status.success {
+  background-color: #C8E6C9;
+  color: #2E7D32;
+}
+
+.scan-status.error {
+  background-color: #FFCDD2;
+  color: #C62828;
+}
+
+.scan-status.paused {
+  background-color: #FFF9C4;
+  color: #F57F17;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.scan-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.scan-controls button {
+  padding: 12px 20px;
+  font-size: 16px;
+}
+
+#flipCameraBtn {
+  margin: 16px auto;
+  display: block;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: #FF9800;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+#flipCameraBtn:hover {
+  background-color: #F57C00;
+  transform: scale(1.05);
+}
+
+#flipCameraBtn:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  #qrReader {
+    max-width: 100%;
+    border-radius: 8px;
+    min-height: 250px;
+  }
+  
+  .scan-status {
+    font-size: 14px;
+    padding: 12px;
+  }
+}
+
+@media (min-width: 769px) {
+  #qrReader {
+    max-width: 600px;
+    min-height: 400px;
+  }
+}
